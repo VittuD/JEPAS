@@ -14,7 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         required=True,
-        choices=("ijepa", "radjepa", "vjepa2"),
+        choices=("echojepa-vjepa2", "ijepa", "radjepa", "vjepa2"),
         help="Model family to use.",
     )
     parser.add_argument(

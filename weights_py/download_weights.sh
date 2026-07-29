@@ -11,24 +11,22 @@ ARIA_MIN_SPLIT_SIZE="${ARIA_MIN_SPLIT_SIZE:-1M}"
 
 usage() {
   cat <<'EOF'
-Download non-EchoJEPA weights into weights_py/.
+Download the smallest available non-manual model for each repo into weights_py/.
 
 Usage:
-  weights_py/download_weights.sh [group ...]
+  weights_py/download_weights.sh [repo ...]
 
-Groups:
-  vjepa2-base       V-JEPA 2 direct PyTorch checkpoints
-  vjepa2-21         V-JEPA 2.1 direct PyTorch checkpoints
-  vjepa2-ac         V-JEPA 2 action-conditioned checkpoint
-  vjepa2-probes     V-JEPA 2 evaluation probe checkpoints
-  vjepa2-hf         V-JEPA 2 Hugging Face repos listed in the README
-  ijepa             I-JEPA direct PyTorch checkpoints
-  radjepa           RadJEPA Hugging Face repo
-  all               Everything above
+Repos:
+  vjepa2     V-JEPA 2.1 ViT-B/16, smallest V-JEPA checkpoint listed in vjepa2 README
+  ijepa      I-JEPA ViT-H/14 IN1K checkpoint, smallest architecture class listed in ijepa README
+  radjepa    RadJEPA Hugging Face repo, ViT-B/14
+  all        All repos above
+
+EchoJEPA is intentionally excluded because its weights are downloaded manually from Google Drive.
 
 Examples:
-  weights_py/download_weights.sh vjepa2-base ijepa radjepa
   weights_py/download_weights.sh all
+  weights_py/download_weights.sh vjepa2 radjepa
 
 Environment:
   ARIA_CONNECTIONS=16       Connections per direct URL
@@ -58,8 +56,21 @@ need_cmd() {
 }
 
 download_direct() {
-  local url="$1"
-  local output="$2"
+  local repo_dir="$1"
+  local url="$2"
+  local output="$3"
+  local dest_dir="${WEIGHTS_DIR}/${repo_dir}"
+  local dest="${dest_dir}/${output}"
+
+  mkdir -p "${dest_dir}"
+
+  if [[ -s "${dest}" && ! -e "${dest}.aria2" ]]; then
+    echo "Already downloaded: ${dest}"
+    return 0
+  fi
+
+  echo "Downloading: ${url}"
+  echo "Destination: ${dest}"
   aria2c \
     --continue=true \
     --max-connection-per-server="${ARIA_CONNECTIONS}" \
@@ -68,15 +79,33 @@ download_direct() {
     --auto-file-renaming=false \
     --allow-overwrite=true \
     --summary-interval=30 \
-    --dir="${WEIGHTS_DIR}" \
+    --dir="${dest_dir}" \
     --out="${output}" \
     "${url}"
+
+  if [[ ! -s "${dest}" || -e "${dest}.aria2" ]]; then
+    echo "Download did not complete cleanly: ${dest}" >&2
+    exit 1
+  fi
 }
 
 download_hf() {
   local repo="$1"
   local output_dir="$2"
-  "${VENV_DIR}/bin/hf" download "${repo}" --local-dir "${WEIGHTS_DIR}/${output_dir}"
+  local dest_dir="${WEIGHTS_DIR}/${output_dir}"
+  local complete_marker="${dest_dir}/.download_complete"
+
+  mkdir -p "${dest_dir}"
+
+  if [[ -f "${complete_marker}" ]]; then
+    echo "Already downloaded: ${dest_dir}"
+    return 0
+  fi
+
+  echo "Downloading HF repo: ${repo}"
+  echo "Destination: ${dest_dir}"
+  "${VENV_DIR}/bin/hf" download "${repo}" --local-dir "${dest_dir}"
+  touch "${complete_marker}"
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -99,47 +128,20 @@ fi
 mkdir -p "${WEIGHTS_DIR}"
 export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 
-if want vjepa2-base "$@"; then
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vitl.pt vjepa2-vitl.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vith.pt vjepa2-vith.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vitg.pt vjepa2-vitg.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vitg-384.pt vjepa2-vitg-384.pt
-fi
-
-if want vjepa2-21 "$@"; then
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt vjepa2_1_vitb_dist_vitG_384.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitl_dist_vitG_384.pt vjepa2_1_vitl_dist_vitG_384.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitg_384.pt vjepa2_1_vitg_384.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitG_384.pt vjepa2_1_vitG_384.pt
-fi
-
-if want vjepa2-ac "$@"; then
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/vjepa2-ac-vitg.pt vjepa2-ac-vitg.pt
-fi
-
-if want vjepa2-probes "$@"; then
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/evals/ssv2-vitl-16x2x3.pt ssv2-vitl-16x2x3.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/evals/diving48-vitl-256.pt diving48-vitl-256.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/evals/ek100-vitl-256.pt ek100-vitl-256.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/evals/ssv2-vitg-384-64x2x3.pt ssv2-vitg-384-64x2x3.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/evals/diving48-vitg-384-32x4x3.pt diving48-vitg-384-32x4x3.pt
-  download_direct https://dl.fbaipublicfiles.com/vjepa2/evals/ek100-vitg-384.pt ek100-vitg-384.pt
-fi
-
-if want vjepa2-hf "$@"; then
-  download_hf facebook/vjepa2-vitl-fpc64-256 hf-vjepa2-vitl-fpc64-256
-  download_hf facebook/vjepa2-vith-fpc64-256 hf-vjepa2-vith-fpc64-256
-  download_hf facebook/vjepa2-vitg-fpc64-256 hf-vjepa2-vitg-fpc64-256
-  download_hf facebook/vjepa2-vitg-fpc64-384 hf-vjepa2-vitg-fpc64-384
+if want vjepa2 "$@"; then
+  download_direct \
+    vjepa2 \
+    https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt \
+    vjepa2_1_vitb_dist_vitG_384.pt
 fi
 
 if want ijepa "$@"; then
-  download_direct https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.14-300e.pth.tar ijepa-IN1K-vit.h.14-300e.pth.tar
-  download_direct https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.16-448px-300e.pth.tar ijepa-IN1K-vit.h.16-448px-300e.pth.tar
-  download_direct https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.h.14-900e.pth.tar ijepa-IN22K-vit.h.14-900e.pth.tar
-  download_direct https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar ijepa-IN22K-vit.g.16-600e.pth.tar
+  download_direct \
+    ijepa \
+    https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.14-300e.pth.tar \
+    IN1K-vit.h.14-300e.pth.tar
 fi
 
 if want radjepa "$@"; then
-  download_hf AIDElab-IITBombay/RadJEPA hf-RadJEPA
+  download_hf AIDElab-IITBombay/RadJEPA radjepa/hf-RadJEPA
 fi

@@ -25,9 +25,16 @@ scripts/create_weights_venv.sh
 source .venv/bin/activate
 ```
 
+Create the shared CPU inference environment for source-repo smoke tests:
+
+```bash
+scripts/create_vjepa2_venv.sh
+source .venv_vjepa2/bin/activate
+```
+
 ## Weights
 
-EchoJEPA weights are managed manually. Other weight options are documented in:
+EchoJEPA weights are managed manually from Google Drive. The download venv includes `gdown` for that path. Other scripted weight options are documented in:
 
 ```bash
 weights_py/OPTIONS.md
@@ -36,7 +43,7 @@ weights_py/OPTIONS.md
 Start resumable non-Echo downloads with:
 
 ```bash
-weights_py/download_weights.sh vjepa2-base ijepa radjepa
+weights_py/download_weights.sh all
 ```
 
 ## Experiments
