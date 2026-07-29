@@ -1,0 +1,29 @@
+# Local Python environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Downloaded model/data artifacts
+weights/
+weights_py/*
+!weights_py/.gitkeep
+!weights_py/OPTIONS.md
+!weights_py/download_weights.sh
+
+# Python runtime/cache output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Local logs
+*.log
+*.pid
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/

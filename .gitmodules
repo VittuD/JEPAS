@@ -1,0 +1,12 @@
+[submodule "repos/EchoJEPA"]
+	path = repos/EchoJEPA
+	url = https://github.com/bowang-lab/EchoJEPA.git
+[submodule "repos/RadJEPA"]
+	path = repos/RadJEPA
+	url = https://github.com/aidelab-iitbombay/RadJEPA.git
+[submodule "repos/ijepa"]
+	path = repos/ijepa
+	url = https://github.com/facebookresearch/ijepa.git
+[submodule "repos/vjepa2"]
+	path = repos/vjepa2
+	url = https://github.com/facebookresearch/vjepa2.git
