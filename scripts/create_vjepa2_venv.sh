@@ -2,15 +2,5 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_DIR="${ROOT_DIR}/.venv_vjepa2"
 
-python3 -m venv "${VENV_DIR}"
-"${VENV_DIR}/bin/python" -m pip install --upgrade pip
-"${VENV_DIR}/bin/python" -m pip install -r "${ROOT_DIR}/requirements/vjepa2_inference.txt"
-
-cat <<EOF
-Created ${VENV_DIR}
-
-Activate with:
-  source ${VENV_DIR}/bin/activate
-EOF
+"${ROOT_DIR}/scripts/create_inference_venv.sh" cpu

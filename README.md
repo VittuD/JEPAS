@@ -32,6 +32,20 @@ scripts/create_vjepa2_venv.sh
 source .venv_vjepa2/bin/activate
 ```
 
+Or choose the inference profile explicitly:
+
+```bash
+scripts/create_inference_venv.sh cpu
+source .venv_vjepa2/bin/activate
+
+scripts/create_inference_venv.sh cuda
+source .venv_jepa_cuda/bin/activate
+```
+
+The CUDA blueprint only installs a GPU-enabled PyTorch wheel. The experiment
+scripts still default to CPU execution until they are given explicit device
+flags.
+
 ## Weights
 
 EchoJEPA weights are managed manually from Google Drive. The download venv includes `gdown` for that path. Other scripted weight options are documented in:
