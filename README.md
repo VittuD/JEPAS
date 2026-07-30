@@ -49,3 +49,4 @@ weights_py/download_weights.sh all
 ## Experiments
 
 Experiment code should live under `experiments/` and import model code from the source repositories under `repos/`.
+Current smoke tests cover V-JEPA 2, I-JEPA, RadJEPA, EchoJEPA V-JEPA 2, and Neuro-JEPA.

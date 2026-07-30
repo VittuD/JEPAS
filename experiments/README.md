@@ -61,6 +61,22 @@ The same CPU inference environment also supports RadJEPA after installing the sh
 
 RadJEPA's provided HF model returns a mean-pooled image embedding.
 
+## Neuro-JEPA
+
+Neuro-JEPA uses a 3D MRI volume backbone. Put the gated Hugging Face download here:
+
+```text
+weights_py/neurojepa/Neuro-JEPA/model.safetensors
+```
+
+Then run a random-volume smoke test:
+
+```bash
+.venv_vjepa2/bin/python experiments/neurojepa_random_volume_smoke.py
+```
+
+The script creates one random `[1, 1, 96, 108, 96]` volume and prints the non-pooled 3D patch-token representation plus a mean-pooled summary.
+
 ## EchoJEPA V-JEPA 2
 
 EchoJEPA weights are downloaded manually. For the V-JEPA 2 variant, put the checkpoint here:

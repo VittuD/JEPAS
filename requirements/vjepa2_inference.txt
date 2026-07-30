@@ -4,4 +4,5 @@ torch==2.13.0+cpu
 timm==1.0.24
 einops==0.8.1
 numpy==2.5.1
+safetensors==0.8.0
 transformers==5.14.1
