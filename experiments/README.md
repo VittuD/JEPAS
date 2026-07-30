@@ -30,11 +30,19 @@ Create the CPU inference environment:
 scripts/create_vjepa2_venv.sh
 ```
 
-Run a random-image smoke test against the smallest scripted V-JEPA 2 checkpoint:
+Run a random-image smoke test against the default smallest scripted V-JEPA checkpoint:
 
 ```bash
 .venv_vjepa2/bin/python experiments/vjepa2_random_image_smoke.py \
   --checkpoint weights_py/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt
+```
+
+Other tested variants:
+
+```bash
+.venv_vjepa2/bin/python experiments/vjepa2_random_image_smoke.py --variant vjepa2-vitl
+.venv_vjepa2/bin/python experiments/vjepa2_random_image_smoke.py --variant vjepa2-vith
+.venv_vjepa2/bin/python experiments/vjepa2_random_image_smoke.py --variant vjepa2-1-vitg
 ```
 
 The script creates one random image, repeats it across the video input expected by the selected V-JEPA 2 checkpoint, and prints token and pooled embedding shapes.

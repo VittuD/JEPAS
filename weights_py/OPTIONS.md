@@ -40,6 +40,39 @@ weights_py/download_weights.sh ijepa
 weights_py/download_weights.sh radjepa
 ```
 
+## Additional V-JEPA Checkpoints
+
+The default `vjepa2` target downloads the smallest listed V-JEPA 2.1 checkpoint, which is distilled:
+
+```text
+weights_py/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt
+```
+
+For non-distilled V-JEPA 2 checkpoints:
+
+```bash
+weights_py/download_weights.sh vjepa2-vitl vjepa2-vith
+```
+
+This downloads:
+
+| Model | Destination |
+| --- | --- |
+| V-JEPA 2 ViT-L/16 | `weights_py/vjepa2/vitl.pt` |
+| V-JEPA 2 ViT-H/16 | `weights_py/vjepa2/vith.pt` |
+
+For the smallest non-distilled V-JEPA 2.1 checkpoint:
+
+```bash
+weights_py/download_weights.sh vjepa2-1-vitg
+```
+
+This downloads:
+
+```text
+weights_py/vjepa2/vjepa2_1_vitg_384.pt
+```
+
 ## EchoJEPA
 
 Echo-specific checkpoints are provided through a Google Drive folder, not Torch Hub or Hugging Face model repos in the README.

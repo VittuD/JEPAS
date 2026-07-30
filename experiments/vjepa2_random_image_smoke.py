@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--variant",
-        choices=("vjepa2-vitl", "vjepa2-1-vitb"),
+        choices=("vjepa2-vitl", "vjepa2-vith", "vjepa2-1-vitb", "vjepa2-1-vitg"),
         default="vjepa2-1-vitb",
         help="Source model variant to instantiate.",
     )
@@ -44,15 +44,23 @@ def clean_backbone_key(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.T
 def default_checkpoint(variant: str) -> Path:
     if variant == "vjepa2-vitl":
         return ROOT_DIR / "weights_py" / "vjepa2" / "vitl.pt"
+    if variant == "vjepa2-vith":
+        return ROOT_DIR / "weights_py" / "vjepa2" / "vith.pt"
     if variant == "vjepa2-1-vitb":
         return ROOT_DIR / "weights_py" / "vjepa2" / "vjepa2_1_vitb_dist_vitG_384.pt"
+    if variant == "vjepa2-1-vitg":
+        return ROOT_DIR / "weights_py" / "vjepa2" / "vjepa2_1_vitg_384.pt"
     raise ValueError(f"Unknown variant: {variant}")
 
 
 def default_image_size(variant: str) -> int:
     if variant == "vjepa2-vitl":
         return 256
+    if variant == "vjepa2-vith":
+        return 256
     if variant == "vjepa2-1-vitb":
+        return 384
+    if variant == "vjepa2-1-vitg":
         return 384
     raise ValueError(f"Unknown variant: {variant}")
 
@@ -61,7 +69,12 @@ def main() -> None:
     args = parse_args()
     sys.path.insert(0, str(VJEPA2_DIR))
 
-    from src.hub.backbones import vjepa2_1_vit_base_384, vjepa2_vit_large
+    from src.hub.backbones import (
+        vjepa2_1_vit_base_384,
+        vjepa2_1_vit_giant_384,
+        vjepa2_vit_huge,
+        vjepa2_vit_large,
+    )
 
     checkpoint_path = args.checkpoint or default_checkpoint(args.variant)
     image_size = args.image_size or default_image_size(args.variant)
@@ -73,8 +86,12 @@ def main() -> None:
 
     if args.variant == "vjepa2-vitl":
         model, _predictor = vjepa2_vit_large(pretrained=False)
+    elif args.variant == "vjepa2-vith":
+        model, _predictor = vjepa2_vit_huge(pretrained=False)
     elif args.variant == "vjepa2-1-vitb":
         model, _predictor = vjepa2_1_vit_base_384(pretrained=False)
+    elif args.variant == "vjepa2-1-vitg":
+        model, _predictor = vjepa2_1_vit_giant_384(pretrained=False)
     else:
         raise ValueError(f"Unknown variant: {args.variant}")
     model.eval()

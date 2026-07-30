@@ -18,14 +18,21 @@ Usage:
 
 Repos:
   vjepa2     V-JEPA 2.1 ViT-B/16, smallest V-JEPA checkpoint listed in vjepa2 README
+  vjepa2-vitl
+             V-JEPA 2 ViT-L/16, smallest non-distilled V-JEPA 2 checkpoint
+  vjepa2-vith
+             V-JEPA 2 ViT-H/16 non-distilled checkpoint
+  vjepa2-1-vitg
+             V-JEPA 2.1 ViT-g/16, smallest non-distilled V-JEPA 2.1 checkpoint
   ijepa      I-JEPA ViT-H/14 IN1K checkpoint, smallest architecture class listed in ijepa README
   radjepa    RadJEPA Hugging Face repo, ViT-B/14
-  all        All repos above
+  all        Smallest model for each non-manual repo
 
 EchoJEPA is intentionally excluded because its weights are downloaded manually from Google Drive.
 
 Examples:
   weights_py/download_weights.sh all
+  weights_py/download_weights.sh vjepa2-vitl vjepa2-vith vjepa2-1-vitg
   weights_py/download_weights.sh vjepa2 radjepa
 
 Environment:
@@ -133,6 +140,27 @@ if want vjepa2 "$@"; then
     vjepa2 \
     https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt \
     vjepa2_1_vitb_dist_vitG_384.pt
+fi
+
+if want vjepa2-vitl "$@"; then
+  download_direct \
+    vjepa2 \
+    https://dl.fbaipublicfiles.com/vjepa2/vitl.pt \
+    vitl.pt
+fi
+
+if want vjepa2-vith "$@"; then
+  download_direct \
+    vjepa2 \
+    https://dl.fbaipublicfiles.com/vjepa2/vith.pt \
+    vith.pt
+fi
+
+if want vjepa2-1-vitg "$@"; then
+  download_direct \
+    vjepa2 \
+    https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitg_384.pt \
+    vjepa2_1_vitg_384.pt
 fi
 
 if want ijepa "$@"; then
