@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JEPA qualitative review</title>
+    <link rel="stylesheet" href="review.css">
+    <script defer src="review-data.js"></script>
+    <script defer src="review.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="identity">
+        <p class="eyebrow">JEPA experiments</p>
+        <h1 id="app-title">Qualitative review</h1>
+        <p id="run-summary" class="run-summary"></p>
+      </div>
+      <div class="toolbar" aria-label="Review controls">
+        <div class="control-group">
+          <span class="control-label">Layout</span>
+          <div class="segmented" id="mode-control">
+            <button type="button" data-mode="input">By input</button>
+            <button type="button" data-mode="model">By model</button>
+            <button type="button" data-mode="matrix">Matrix</button>
+          </div>
+        </div>
+        <label class="control-group" id="context-control">
+          <span class="control-label" id="context-label">Input</span>
+          <select id="context-select"></select>
+        </label>
+        <label class="control-group" id="view-control">
+          <span class="control-label">Representation</span>
+          <select id="view-select">
+            <option value="pca_rgb">PCA RGB</option>
+            <option value="pc1">PC1</option>
+            <option value="kmeans">KMeans k=4</option>
+            <option value="full">Full figure</option>
+          </select>
+        </label>
+        <label class="control-group size-control">
+          <span class="control-label">Tile size</span>
+          <input id="tile-size" type="range" min="150" max="360" step="30" value="240">
+        </label>
+      </div>
+    </header>
+
+    <main>
+      <section id="reference-strip" class="reference-strip" aria-label="Selected input"></section>
+      <div id="review-grid" class="review-grid"></div>
+    </main>
+
+    <dialog id="detail-dialog">
+      <header class="dialog-header">
+        <div>
+          <p id="detail-context" class="eyebrow"></p>
+          <h2 id="detail-title"></h2>
+        </div>
+        <button id="detail-close" class="quiet-button" type="button">Close</button>
+      </header>
+      <div class="detail-visuals">
+        <figure>
+          <img id="detail-reference" alt="">
+          <figcaption>Canonical input</figcaption>
+        </figure>
+        <figure>
+          <img id="detail-map" alt="">
+          <figcaption id="detail-view-label"></figcaption>
+        </figure>
+      </div>
+      <div class="detail-footer">
+        <dl id="detail-metadata"></dl>
+        <nav id="detail-links" class="artifact-links" aria-label="Result artifacts"></nav>
+      </div>
+      <div class="dialog-navigation">
+        <button id="detail-previous" type="button">Previous</button>
+        <span id="detail-position"></span>
+        <button id="detail-next" type="button">Next</button>
+      </div>
+    </dialog>
+  </body>
+</html>

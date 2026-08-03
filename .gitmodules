@@ -13,3 +13,6 @@
 [submodule "repos/Neuro-JEPA"]
 	path = repos/Neuro-JEPA
 	url = https://github.com/NYUMedML/Neuro-JEPA.git
+[submodule "repos/ijepa_lite"]
+	path = repos/ijepa_lite
+	url = https://github.com/VittuD/ijepa_lite

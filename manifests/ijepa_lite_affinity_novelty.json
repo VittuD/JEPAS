@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "name": "ijepa-lite-affinity-novelty",
+  "source": {
+    "repository": "https://github.com/VittuD/ijepa_lite",
+    "revision": "388e73b571db4cc6132f38ba56ea6331ae4610ec",
+    "run_uri": "leonardo:///leonardo_work/IscrC_TBoneAI/vitturini/outputs/2026-06-08/13-35-55_claim_chestmnist_224_vith14_mi_affinity_novelty_from_meta_step1170_b2048/rank0",
+    "hydra_config_uri": "leonardo:///leonardo_work/IscrC_TBoneAI/vitturini/outputs/2026-06-08/13-35-55_claim_chestmnist_224_vith14_mi_affinity_novelty_from_meta_step1170_b2048/rank0/.hydra/config.yaml"
+  },
+  "checkpoint": {
+    "default_path": "weights/ijepa_lite_affinity_novelty/last.pt",
+    "source_uri": "leonardo:///leonardo_work/IscrC_TBoneAI/vitturini/outputs/2026-06-08/13-35-55_claim_chestmnist_224_vith14_mi_affinity_novelty_from_meta_step1170_b2048/rank0/checkpoints/last.pt",
+    "size_bytes": 10624404105,
+    "managed_by_repository": false,
+    "encoder": "target"
+  },
+  "model": {
+    "arch": "vit_huge",
+    "image_size": 224,
+    "patch_size": 14,
+    "embed_dim": 1280,
+    "depth": 32,
+    "num_heads": 16,
+    "remove_head": true,
+    "pos_embed_kind": "learned",
+    "use_cls_token": false,
+    "target_mode": "ema"
+  },
+  "training": {
+    "dataset": "chestmnist",
+    "as_rgb": true,
+    "max_steps": 1170,
+    "ema_momentum": [
+      0.99925,
+      0.99925
+    ],
+    "initial_weights_uri": "leonardo:///leonardo_work/IscrC_TBoneAI/vitturini/original_jepa_weights/IN1K-vit.h.14-300e.ijepa_lite.pt"
+  },
+  "masking": {
+    "name": "mi_3way",
+    "affinity_novelty": {
+      "weight": [
+        1.0,
+        1.0
+      ],
+      "alpha": 4.0,
+      "w_tgt": 1.0,
+      "gamma": 0.5
+    }
+  },
+  "preprocessing": {
+    "color_mode": "RGB",
+    "normalization_mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "normalization_std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  }
+}

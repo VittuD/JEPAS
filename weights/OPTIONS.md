@@ -1,9 +1,10 @@
 # Weight Download Options
 
-This folder is for Python-managed downloaded weights. Use the workspace venv:
+This folder holds local model weights. Git tracks only this documentation and
+the downloader; checkpoint files and downloaded model directories stay local.
+Use the workspace venv:
 
 ```bash
-cd /home/davide/Desktop/JEPAS
 source .venv/bin/activate
 ```
 
@@ -14,16 +15,16 @@ EchoJEPA weights are downloaded manually from Google Drive, so the script handle
 Run:
 
 ```bash
-weights_py/download_weights.sh all
+weights/download_weights.sh all
 ```
 
 This downloads:
 
 | Repo | Selected model | Destination |
 | --- | --- | --- |
-| `repos/vjepa2` | V-JEPA 2.1 ViT-B/16, 80M params, smallest V-JEPA checkpoint listed in the README | `weights_py/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt` |
-| `repos/ijepa` | I-JEPA ViT-H/14 IN1K, one of the smallest I-JEPA architecture options listed in the README | `weights_py/ijepa/IN1K-vit.h.14-300e.pth.tar` |
-| `repos/RadJEPA` | RadJEPA ViT-B/14 Hugging Face repo | `weights_py/radjepa/hf-RadJEPA/` |
+| `repos/vjepa2` | V-JEPA 2.1 ViT-B/16, 80M params, smallest V-JEPA checkpoint listed in the README | `weights/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt` |
+| `repos/ijepa` | I-JEPA ViT-H/14 IN1K, one of the smallest I-JEPA architecture options listed in the README | `weights/ijepa/IN1K-vit.h.14-300e.pth.tar` |
+| `repos/RadJEPA` | RadJEPA ViT-B/14 Hugging Face repo | `weights/radjepa/hf-RadJEPA/` |
 
 The script uses:
 
@@ -35,9 +36,9 @@ Completed direct downloads are skipped when the destination file exists and no `
 ## Individual Repos
 
 ```bash
-weights_py/download_weights.sh vjepa2
-weights_py/download_weights.sh ijepa
-weights_py/download_weights.sh radjepa
+weights/download_weights.sh vjepa2
+weights/download_weights.sh ijepa
+weights/download_weights.sh radjepa
 ```
 
 ## Additional V-JEPA Checkpoints
@@ -45,32 +46,32 @@ weights_py/download_weights.sh radjepa
 The default `vjepa2` target downloads the smallest listed V-JEPA 2.1 checkpoint, which is distilled:
 
 ```text
-weights_py/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt
+weights/vjepa2/vjepa2_1_vitb_dist_vitG_384.pt
 ```
 
 For non-distilled V-JEPA 2 checkpoints:
 
 ```bash
-weights_py/download_weights.sh vjepa2-vitl vjepa2-vith
+weights/download_weights.sh vjepa2-vitl vjepa2-vith
 ```
 
 This downloads:
 
 | Model | Destination |
 | --- | --- |
-| V-JEPA 2 ViT-L/16 | `weights_py/vjepa2/vitl.pt` |
-| V-JEPA 2 ViT-H/16 | `weights_py/vjepa2/vith.pt` |
+| V-JEPA 2 ViT-L/16 | `weights/vjepa2/vitl.pt` |
+| V-JEPA 2 ViT-H/16 | `weights/vjepa2/vith.pt` |
 
 For the smallest non-distilled V-JEPA 2.1 checkpoint:
 
 ```bash
-weights_py/download_weights.sh vjepa2-1-vitg
+weights/download_weights.sh vjepa2-1-vitg
 ```
 
 This downloads:
 
 ```text
-weights_py/vjepa2/vjepa2_1_vitg_384.pt
+weights/vjepa2/vjepa2_1_vitg_384.pt
 ```
 
 ## EchoJEPA
@@ -92,15 +93,15 @@ vitl-vmix22m-pt220-c55.pt
 Expected local path:
 
 ```text
-weights_py/echojepa/vitl-vmix22m-pt220-c55.pt
+weights/echojepa/vitl-vmix22m-pt220-c55.pt
 ```
 
 Reproducible `gdown` command from the download venv:
 
 ```bash
-mkdir -p weights_py/echojepa
+mkdir -p weights/echojepa
 .venv/bin/gdown --continue 'https://drive.google.com/uc?id=1T_ubAMpDMEByH7V6TJu9iT5Yf9IxlDBB' \
-  -O weights_py/echojepa/vitl-vmix22m-pt220-c55.pt
+  -O weights/echojepa/vitl-vmix22m-pt220-c55.pt
 ```
 
 Other EchoJEPA V-JEPA 2 checkpoint listed in the folder:

@@ -6,7 +6,7 @@ VENV_DIR="${ROOT_DIR}/.venv"
 
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
-"${VENV_DIR}/bin/python" -m pip install -r "${ROOT_DIR}/requirements/weights_py.txt"
+"${VENV_DIR}/bin/python" -m pip install -r "${ROOT_DIR}/requirements/weights.txt"
 
 cat <<EOF
 Created ${VENV_DIR}

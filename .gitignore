@@ -5,11 +5,12 @@ venv/
 env/
 
 # Downloaded model/data artifacts
-weights/
-weights_py/*
-!weights_py/.gitkeep
-!weights_py/OPTIONS.md
-!weights_py/download_weights.sh
+weights/*
+!weights/OPTIONS.md
+!weights/download_weights.sh
+experiments/inputs/
+experiments/outputs/*
+experiments/outputs_old/
 
 # Python runtime/cache output
 __pycache__/

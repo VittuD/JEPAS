@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WEIGHTS_DIR="${ROOT_DIR}/weights_py"
+WEIGHTS_DIR="${ROOT_DIR}/weights"
 VENV_DIR="${ROOT_DIR}/.venv"
 
 ARIA_CONNECTIONS="${ARIA_CONNECTIONS:-16}"
@@ -11,10 +11,10 @@ ARIA_MIN_SPLIT_SIZE="${ARIA_MIN_SPLIT_SIZE:-1M}"
 
 usage() {
   cat <<'EOF'
-Download the smallest available non-manual model for each repo into weights_py/.
+Download the smallest available non-manual model for each repo into weights/.
 
 Usage:
-  weights_py/download_weights.sh [repo ...]
+  weights/download_weights.sh [repo ...]
 
 Repos:
   vjepa2     V-JEPA 2.1 ViT-B/16, smallest V-JEPA checkpoint listed in vjepa2 README
@@ -31,9 +31,9 @@ Repos:
 EchoJEPA is intentionally excluded because its weights are downloaded manually from Google Drive.
 
 Examples:
-  weights_py/download_weights.sh all
-  weights_py/download_weights.sh vjepa2-vitl vjepa2-vith vjepa2-1-vitg
-  weights_py/download_weights.sh vjepa2 radjepa
+  weights/download_weights.sh all
+  weights/download_weights.sh vjepa2-vitl vjepa2-vith vjepa2-1-vitg
+  weights/download_weights.sh vjepa2 radjepa
 
 Environment:
   ARIA_CONNECTIONS=16       Connections per direct URL
