@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test Neuro-JEPA source inference on one 3D volume."""
+"""Extract Neuro-JEPA tokens from one 3D volume."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ NEUROJEPA_DIR = ROOT_DIR / "repos" / "Neuro-JEPA"
 DEFAULT_MODEL_DIR = ROOT_DIR / "weights" / "neurojepa" / "Neuro-JEPA"
 sys.path.insert(0, str(ROOT_DIR))
 
-from experiments.shared.device import (  # noqa: E402
+from experiments.device import (  # noqa: E402
     add_runtime_arguments,
     inference_context,
     resolve_runtime,

@@ -1,59 +1,47 @@
 # Experiments
 
-Each experiment has its own folder, entry point, documentation, and output
-namespace.
+The experiment code intentionally has four entry points/components:
 
 ```text
-experiments/
-  smoke/               checkpoint loading and token extraction checks
-  extraction/          generic embedding extraction interface
-  visualization/       model-independent token visualization
-  common_resolution/   matched spatial-resolution comparison
-  cross_media/         every 2D/video model crossed with every media input
-  cross_media_native_resolution/
-                       cross-media matrix at each model's native resolution
-  shared/              reusable experiment helpers
-  inputs/              local/generated inputs (gitignored)
-  outputs/             active generated results (contents gitignored)
-  outputs_old/         dated local result snapshots (gitignored)
+catalog.py       model and example-media definitions
+extract.py       token and pooled embedding extraction
+visualize.py     input, PCA RGB, PC1, KMeans-4, and temporal MP4 rendering
+compare.py       matched/all-media comparisons at fixed or native resolution
+models/          source-backed model adapters
 ```
 
-Start with:
+Inputs and outputs remain under `experiments/inputs/` and
+`experiments/outputs/` and are ignored by Git.
 
-- [`extraction/README.md`](extraction/README.md) to extract token and pooled
-  embeddings from files or directories.
-- [`smoke/README.md`](smoke/README.md) to test a model checkpoint.
-- [`visualization/README.md`](visualization/README.md) to visualize saved tokens.
-- [`common_resolution/README.md`](common_resolution/README.md) to compare all
-  applicable models at `384x384`.
-- [`cross_media/README.md`](cross_media/README.md) to run every applicable model
-  against every image and video.
-- [`cross_media_native_resolution/README.md`](cross_media_native_resolution/README.md)
-  to run the same matrix at each model's native spatial resolution.
+## Models
 
-The shared CPU environment is created with:
+`extract.py --model` supports I-JEPA, RadJEPA, V-JEPA 2 ViT-L/H, V-JEPA 2.1
+ViT-B/G, EchoJEPA, Neuro-JEPA, and the optional custom I-JEPA Lite model. The
+comparison default is the smallest tested 2D/video variant from each family:
+I-JEPA, RadJEPA, V-JEPA 2 ViT-L, V-JEPA 2.1 ViT-B, and EchoJEPA.
 
-```bash
-scripts/create_inference_venv.sh cpu
-```
+Model adapters load the source repository implementation and save non-pooled
+tokens. `extract.py` computes the mean-pooled representation from those tokens.
 
-The CUDA blueprint uses:
+## Comparison protocol
 
-```bash
-scripts/create_inference_venv.sh cuda
-```
+The catalogued examples are an ImageNet-style dog, a chest X-ray, a Diving48
+video, and an EchoNet video.
 
-All inference entry points accept `--device {auto,cpu,cuda}` and
-`--precision {auto,fp32,bf16,fp16}`. No experiment runner creates or modifies an
-environment.
+- Image model on video: frame 0 is used.
+- Video model on image: the adapter repeats the image across the requested frames.
+- Video visualization: static output uses temporal slice 0; the MP4 uses one
+  PCA/KMeans fit shared by every temporal slice.
+- Inputs are center-cropped to square before resizing.
 
-External source implementations stay under `repos/`, downloaded checkpoints
-stay under `weights/`, and generated experiment data remains outside Git.
-The custom `ijepa_lite` affinity-novelty model is an optional catalog entry:
-its source is pinned as a submodule, while its existing remote checkpoint is
-referenced in place and never copied by these scripts.
+`--pairing matched` selects a domain-appropriate input for each model.
+`--pairing all` creates the full model/input matrix. `--resolution 384` matches
+input pixels, while `--resolution native` uses each model's training resolution.
+Patch sizes, token counts, temporal training, and domains remain model-specific.
 
-`experiments/outputs/` is the active workspace used by the runners.
-`experiments/outputs_old/` is reserved for dated local snapshots when clearing
-the active workspace. Inputs and archived outputs are never moved or deleted by
-an experiment runner.
+Comparison output contains one directory per input/model, per-input comparison
+PNGs, a simple `index.html` linking the original PNG/MP4 artifacts, and one root
+`manifest.json` with commands, checkpoints, source revisions, and geometry.
+
+Neuro-JEPA is excluded from 2D comparisons because it consumes 3D MRI volumes,
+but it remains available through `extract.py`.

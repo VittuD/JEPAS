@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import argparse
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,8 +10,9 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from experiments.common_resolution.render_comparison import load_maps
-from experiments.visualization.visualize_embedding import (
+from experiments.compare import load_maps, resolution_for, selected_pairs
+from experiments.catalog import model_specs
+from experiments.visualize import (
     _prepare_tokens,
     _select_2d_tokens,
     _token_pca_maps,
@@ -19,7 +20,26 @@ from experiments.visualization.visualize_embedding import (
 
 
 class LoadMapsTest(unittest.TestCase):
-    def test_uses_visualizer_manifest_slice_for_temporal_tokens(self) -> None:
+    def test_native_resolution_comes_from_catalog(self) -> None:
+        spec = model_specs()["vjepa2-1-vitb"]
+
+        self.assertEqual(resolution_for(spec, "native"), 384)
+
+    def test_matched_pairing_uses_domain_examples(self) -> None:
+        args = argparse.Namespace(
+            models=["ijepa", "echojepa"],
+            inputs=None,
+            pairing="matched",
+        )
+
+        pairs = selected_pairs(args)
+
+        self.assertEqual(
+            [(model.name, media.name) for model, media in pairs],
+            [("ijepa", "dog"), ("echojepa", "echonet")],
+        )
+
+    def test_uses_first_temporal_slice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rng = np.random.default_rng(7)
@@ -33,18 +53,11 @@ class LoadMapsTest(unittest.TestCase):
 
             preview_path = root / "input_frame.jpg"
             Image.new("RGB", (8, 8), color=(32, 64, 96)).save(preview_path)
-            visualization_manifest = root / "visualization_manifest.json"
-            visualization_manifest.write_text(json.dumps({"slice_index": "0"}))
-
             record = {
-                "embedding": str(embedding_path),
+                "tokens": str(embedding_path),
                 "spatial_grid": [2, 2],
                 "temporal_grid": 2,
-                "figure": str(root / "visualization" / "embedding_visualization.png"),
-                "artifacts": {
-                    "preview": {"path": str(preview_path)},
-                    "visualization_manifest": str(visualization_manifest),
-                },
+                "reference": str(preview_path),
             }
             _, rendered_pca, _, _ = load_maps(record)
 

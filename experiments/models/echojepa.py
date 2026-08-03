@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test EchoJEPA V-JEPA 2 source inference on one image or video."""
+"""Extract EchoJEPA V-JEPA 2 tokens from one image or video."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 ECHOJEPA_DIR = ROOT_DIR / "repos" / "EchoJEPA"
 sys.path.insert(0, str(ROOT_DIR))
 
-from experiments.shared.device import (  # noqa: E402
+from experiments.device import (  # noqa: E402
     add_runtime_arguments,
     inference_context,
     resolve_runtime,

@@ -16,17 +16,14 @@ cd "${ROOT_DIR}"
 bash -n scripts/*.sh weights/*.sh
 "${PYTHON}" -m compileall -q experiments
 "${PYTHON}" -m unittest \
-  experiments.common_resolution.test_render_comparison \
-  experiments.shared.test_provenance \
-  experiments.smoke.test_ijepa_lite_affinity_novelty_smoke
+  experiments.tests.test_compare \
+  experiments.tests.test_extract \
+  experiments.tests.test_provenance \
+  experiments.tests.test_ijepa_lite
 
 for manifest in manifests/*.json; do
   "${PYTHON}" -m json.tool "${manifest}" >/dev/null
 done
-
-if command -v node >/dev/null 2>&1; then
-  node --check experiments/cross_media/review/static/review.js
-fi
 
 git diff --check
 git diff --cached --check

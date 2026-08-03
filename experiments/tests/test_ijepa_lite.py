@@ -5,11 +5,8 @@ from pathlib import Path
 
 import torch
 
-from experiments.shared.catalog import (
-    IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST,
-    default_model_names,
-)
-from experiments.smoke.ijepa_lite_affinity_novelty_smoke import (
+from experiments.catalog import CUSTOM_MANIFEST, default_compare_models
+from experiments.models.ijepa_lite import (
     build_encoder,
     extract_encoder_state_dict,
 )
@@ -20,11 +17,11 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 class AffinityNoveltyAdapterTests(unittest.TestCase):
     def test_custom_model_is_opt_in(self) -> None:
-        self.assertNotIn("ijepa-lite-affinity-novelty", default_model_names())
+        self.assertNotIn("ijepa-lite-affinity-novelty", default_compare_models())
 
     def test_default_checkpoint_path_is_repository_relative(self) -> None:
         default_path = Path(
-            IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST["checkpoint"]["default_path"]
+            CUSTOM_MANIFEST["checkpoint"]["default_path"]
         )
 
         self.assertFalse(default_path.is_absolute())
@@ -57,7 +54,7 @@ class AffinityNoveltyAdapterTests(unittest.TestCase):
         self.assertEqual(model.vit.conv_proj.weight.device.type, "meta")
         self.assertFalse(model.use_cls_token)
 
-    def test_supports_nondivisible_common_resolution(self) -> None:
+    def test_supports_nondivisible_resolution(self) -> None:
         model = build_encoder(ROOT_DIR / "repos" / "ijepa_lite", 384)
         patches = model.vit._process_input(
             torch.empty(1, 3, 384, 384, device="meta")

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from experiments.shared.provenance import (
+from experiments.provenance import (
     ROOT_DIR,
     portable_path,
     resolve_portable_path,

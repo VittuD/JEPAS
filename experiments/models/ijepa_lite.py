@@ -17,18 +17,18 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_REPO = ROOT_DIR / "repos" / "ijepa_lite"
 sys.path.insert(0, str(ROOT_DIR))
 
-from experiments.shared.catalog import (  # noqa: E402
-    IJEPA_LITE_AFFINITY_NOVELTY_CHECKPOINT,
-    IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST,
-    IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST_PATH,
+from experiments.catalog import (  # noqa: E402
+    CUSTOM_MANIFEST,
+    CUSTOM_MANIFEST_PATH,
+    custom_checkpoint_path,
 )
-from experiments.shared.device import (  # noqa: E402
+from experiments.device import (  # noqa: E402
     add_runtime_arguments,
     inference_context,
     resolve_runtime,
     seed_inference,
 )
-from experiments.shared.positional_embeddings import (  # noqa: E402
+from experiments.positional_embeddings import (  # noqa: E402
     resize_square_patch_pos_embed,
 )
 
@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        default=IJEPA_LITE_AFFINITY_NOVELTY_CHECKPOINT,
+        default=custom_checkpoint_path(),
         help=(
             "Path to the ijepa_lite training checkpoint. Defaults to the manifest's "
             "repository-relative path and can be overridden with "
@@ -126,7 +126,7 @@ def build_encoder(repo: Path, image_size: int) -> torch.nn.Module:
 
     from ijepa_lite.models.vit_tokens import build_torchvision_vit_tokens
 
-    model_config = IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST["model"]
+    model_config = CUSTOM_MANIFEST["model"]
     patch_size = int(model_config["patch_size"])
     covered_size = (image_size // patch_size) * patch_size
     if covered_size <= 0:
@@ -161,7 +161,7 @@ def load_image(path: Path, image_size: int) -> tuple[torch.Tensor, object]:
     image = image.crop((left, top, left + side, top + side))
     image = image.resize((image_size, image_size), Image.Resampling.BICUBIC)
     tensor = torch.from_numpy(np.asarray(image).copy()).permute(2, 0, 1).float().div(255.0)
-    preprocessing = IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST["preprocessing"]
+    preprocessing = CUSTOM_MANIFEST["preprocessing"]
     mean = torch.tensor(preprocessing["normalization_mean"]).view(3, 1, 1)
     std = torch.tensor(preprocessing["normalization_std"]).view(3, 1, 1)
     return ((tensor - mean) / std).unsqueeze(0), image
@@ -173,7 +173,7 @@ def main() -> None:
     repo = args.ijepa_lite_repo.expanduser().resolve()
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
-    patch_size = int(IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST["model"]["patch_size"])
+    patch_size = int(CUSTOM_MANIFEST["model"]["patch_size"])
     if args.image_size < patch_size:
         raise ValueError(
             f"--image-size must be at least the {patch_size}-pixel patch size."
@@ -221,7 +221,7 @@ def main() -> None:
         preprocessed_image.save(args.output_preprocessed_image)
 
     print(f"checkpoint={checkpoint}")
-    print(f"model_manifest={IJEPA_LITE_AFFINITY_NOVELTY_MANIFEST_PATH}")
+    print(f"model_manifest={CUSTOM_MANIFEST_PATH}")
     print(f"ijepa_lite_repo={repo}")
     print(f"encoder={args.encoder}")
     print(f"image={args.image or 'random'}")

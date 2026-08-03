@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test RadJEPA local HF model inference on one image."""
+"""Extract I-JEPA tokens from one image."""
 
 from __future__ import annotations
 
@@ -11,9 +11,10 @@ import torch
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+IJEPA_DIR = ROOT_DIR / "repos" / "ijepa"
 sys.path.insert(0, str(ROOT_DIR))
 
-from experiments.shared.device import (  # noqa: E402
+from experiments.device import (  # noqa: E402
     add_runtime_arguments,
     inference_context,
     resolve_runtime,
@@ -24,14 +25,24 @@ from experiments.shared.device import (  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--model-dir",
+        "--checkpoint",
         type=Path,
-        default=ROOT_DIR / "weights" / "radjepa" / "hf-RadJEPA",
-        help="Local Hugging Face RadJEPA model directory.",
+        default=ROOT_DIR / "weights" / "ijepa" / "IN1K-vit.h.14-300e.pth.tar",
+        help="Path to an I-JEPA checkpoint.",
+    )
+    parser.add_argument(
+        "--image",
+        type=Path,
+        default=None,
+        help="Optional image path. If omitted, use a seeded random image.",
     )
     parser.add_argument("--image-size", type=int, default=224)
-    parser.add_argument("--image", type=Path, default=None, help="Optional image path.")
-    parser.add_argument("--output-embedding", type=Path, default=None, help="Optional .npy token output.")
+    parser.add_argument(
+        "--output-embedding",
+        type=Path,
+        default=None,
+        help="Optional .npy path for non-pooled token embeddings.",
+    )
     parser.add_argument(
         "--output-preprocessed-image",
         type=Path,
@@ -43,7 +54,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_image(path: Path, image_size: int) -> tuple[torch.Tensor, object]:
+def clean_backbone_key(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    cleaned = {}
+    for key, value in state_dict.items():
+        cleaned[key.replace("module.", "")] = value
+    return cleaned
+
+
+def load_image(path: Path, image_size: int) -> torch.Tensor:
     import numpy as np
     from PIL import Image
 
@@ -61,43 +79,33 @@ def load_image(path: Path, image_size: int) -> tuple[torch.Tensor, object]:
 
 def main() -> None:
     args = parse_args()
-    if not args.model_dir.exists():
-        raise FileNotFoundError(args.model_dir)
+    sys.path.insert(0, str(IJEPA_DIR))
 
-    sys.path.insert(0, str(args.model_dir))
-    from modeling_radjepa import RadJEPAConfig, RadJEPAEncoder
+    from src.models.vision_transformer import vit_huge
+
+    if not args.checkpoint.exists():
+        raise FileNotFoundError(args.checkpoint)
 
     runtime = resolve_runtime(args.device, args.precision)
     seed_inference(args.seed, runtime)
 
-    config = RadJEPAConfig.from_pretrained(str(args.model_dir), local_files_only=True)
-    config.image_size = args.image_size
-    model = RadJEPAEncoder(config)
-    checkpoint = torch.load(
-        args.model_dir / "jepa_encoder.pth.tar",
-        map_location="cpu",
-        weights_only=True,
-    )
-    if "encoder" in checkpoint:
-        state_dict = checkpoint["encoder"]
-    elif "state_dict" in checkpoint and "encoder" in checkpoint["state_dict"]:
-        state_dict = checkpoint["state_dict"]["encoder"]
-    else:
-        raise RuntimeError(f"Encoder weights not found. Keys: {sorted(checkpoint)}")
+    model = vit_huge(img_size=[args.image_size], patch_size=14)
 
-    state_dict = {
-        key.replace("module.", "").replace("encoder.", ""): value
-        for key, value in state_dict.items()
-    }
+    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+    state_dict = checkpoint.get("target_encoder") or checkpoint.get("encoder")
+    if state_dict is None:
+        raise KeyError(f"Checkpoint has no target_encoder or encoder key. Keys: {sorted(checkpoint)}")
+
+    state_dict = clean_backbone_key(state_dict)
     sys.path.insert(0, str(ROOT_DIR))
-    from experiments.shared.positional_embeddings import resize_square_patch_pos_embed
+    from experiments.positional_embeddings import resize_square_patch_pos_embed
 
     pos_resize = resize_square_patch_pos_embed(
         state_dict,
         key="pos_embed",
-        target_tokens=model.model.pos_embed.shape[1],
+        target_tokens=model.pos_embed.shape[1],
     )
-    load_msg = model.model.load_state_dict(state_dict, strict=True)
+    load_msg = model.load_state_dict(state_dict, strict=True)
     del checkpoint, state_dict
     model = model.to(runtime.device).eval()
 
@@ -108,19 +116,19 @@ def main() -> None:
         image, preprocessed_image = load_image(args.image, args.image_size)
     image = image.to(runtime.device, non_blocking=runtime.device.type == "cuda")
     with inference_context(runtime):
-        tokens = model.model.forward_features(image)
-    embedding = tokens.mean(dim=1)
+        embedding = model(image)
+    pooled = embedding.mean(dim=1)
 
     if args.output_embedding is not None:
         import numpy as np
 
         args.output_embedding.parent.mkdir(parents=True, exist_ok=True)
-        np.save(args.output_embedding, tokens.detach().float().cpu().numpy())
+        np.save(args.output_embedding, embedding.detach().float().cpu().numpy())
     if args.output_preprocessed_image is not None and preprocessed_image is not None:
         args.output_preprocessed_image.parent.mkdir(parents=True, exist_ok=True)
         preprocessed_image.save(args.output_preprocessed_image)
 
-    print(f"model_dir={args.model_dir}")
+    print(f"checkpoint={args.checkpoint}")
     print(f"image={args.image or 'random'}")
     print(f"device={runtime.device.type}")
     print(f"precision={runtime.precision}")
@@ -129,12 +137,12 @@ def main() -> None:
         f"missing_keys={len(load_msg.missing_keys)} "
         f"unexpected_keys={len(load_msg.unexpected_keys)}"
     )
-    print(f"tokens_shape={tuple(tokens.shape)}")
     print(f"embedding_shape={tuple(embedding.shape)}")
-    embedding_stats = embedding.detach().float()
+    print(f"pooled_shape={tuple(pooled.shape)}")
+    pooled_stats = pooled.detach().float()
     print(
-        f"embedding_mean={embedding_stats.mean().item():.6f} "
-        f"embedding_std={embedding_stats.std().item():.6f}"
+        f"pooled_mean={pooled_stats.mean().item():.6f} "
+        f"pooled_std={pooled_stats.std().item():.6f}"
     )
     if args.output_embedding is not None:
         print(f"output_embedding={args.output_embedding}")
