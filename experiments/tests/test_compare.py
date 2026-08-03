@@ -44,8 +44,8 @@ class ComparisonTest(unittest.TestCase):
             metadata = {
                 "schema": SCHEMA_NAME,
                 "figure": "visualization.png",
-                "video": None,
-                "video_expected": False,
+                "frames": [],
+                "temporal_expected": False,
                 "grid_shape": [2, 2],
                 "pca_explained_variance": [0.5, 0.3, 0.2],
                 "extraction": {

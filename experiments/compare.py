@@ -20,9 +20,9 @@ from experiments.artifacts import (  # noqa: E402
     EMBEDDINGS_NAME,
     FIGURE_NAME,
     SCHEMA_NAME,
-    VIDEO_NAME,
     cleanup_embeddings,
     load_visualization_metadata,
+    temporal_frame_paths,
     valid_visualization,
 )
 from experiments.catalog import (  # noqa: E402
@@ -180,10 +180,12 @@ def run_pair(
         adaptation = "image_repeated_as_video"
     else:
         adaptation = "native"
-    requires_video = model.modality == "video"
-    if not force and valid_visualization(pair_dir, require_video=requires_video):
+    requires_temporal = model.modality == "video"
+    if not force and valid_visualization(
+        pair_dir, require_temporal=requires_temporal
+    ):
         if not keep_embeddings:
-            cleanup_embeddings(pair_dir, require_video=requires_video)
+            cleanup_embeddings(pair_dir, require_temporal=requires_temporal)
         metadata = load_visualization_metadata(pair_dir)
         assert metadata is not None
         extraction = metadata["extraction"]
@@ -196,7 +198,7 @@ def run_pair(
             "resolution": resolution,
             "patch_size": model.patch_size,
             "spatial_grid": [resolution // model.patch_size] * 2,
-            "temporal_grid": frames // 2 if requires_video else None,
+            "temporal_grid": frames // 2 if requires_temporal else None,
             "embeddings": portable_path(pair_dir / EMBEDDINGS_NAME)
             if (pair_dir / EMBEDDINGS_NAME).exists()
             else None,
@@ -206,7 +208,7 @@ def run_pair(
             "pooled_dtype": extraction["pooled_dtype"],
             "preview": portable_path(pair_dir / "input.jpg"),
             "figure": portable_path(pair_dir / FIGURE_NAME),
-            "video": portable_path(pair_dir / VIDEO_NAME) if requires_video else None,
+            "frames": [portable_path(path) for path in temporal_frame_paths(pair_dir)],
             "status": "reused",
         }
     source, adaptation = effective_input(model, media, first_frames)
@@ -232,18 +234,19 @@ def run_pair(
         frames=frames,
     )
     figure = pair_dir / FIGURE_NAME
-    video = pair_dir / VIDEO_NAME
-    if force or not valid_visualization(pair_dir, require_video=requires_video):
+    if force or not valid_visualization(
+        pair_dir, require_temporal=requires_temporal
+    ):
         run_command(
             command,
             cwd=ROOT_DIR,
             log_path=pair_dir / "run.log",
             log_mode="a",
         )
-    if not valid_visualization(pair_dir, require_video=requires_video):
+    if not valid_visualization(pair_dir, require_temporal=requires_temporal):
         raise RuntimeError(f"Visualization did not produce valid artifacts in {pair_dir}.")
     if not keep_embeddings:
-        cleanup_embeddings(pair_dir, require_video=requires_video)
+        cleanup_embeddings(pair_dir, require_temporal=requires_temporal)
     return {
         "model": model.name,
         "input": media.name,
@@ -253,7 +256,7 @@ def run_pair(
         "resolution": resolution,
         "patch_size": model.patch_size,
         "spatial_grid": [resolution // model.patch_size] * 2,
-        "temporal_grid": frames // 2 if requires_video else None,
+        "temporal_grid": frames // 2 if requires_temporal else None,
         "embeddings": extraction["embeddings"] if keep_embeddings else None,
         "token_shape": extraction["token_shape"],
         "token_dtype": extraction["token_dtype"],
@@ -261,7 +264,7 @@ def run_pair(
         "pooled_dtype": extraction["pooled_dtype"],
         "preview": extraction["preview"],
         "figure": portable_path(figure),
-        "video": portable_path(video) if video.exists() else None,
+        "frames": [portable_path(path) for path in temporal_frame_paths(pair_dir)],
         "extract_command": extraction["command"],
         "visualize_command": shlex.join(command),
         "status": "computed",

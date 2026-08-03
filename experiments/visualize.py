@@ -166,7 +166,8 @@ def _render_static(
     title: str,
 ) -> None:
     plt = _pyplot()
-    figure, axes = plt.subplots(1, 4, figsize=(12, 3), layout="constrained")
+    figure, axes_grid = plt.subplots(2, 2, figsize=(6, 6), layout="constrained")
+    axes = axes_grid.ravel()
     if reference is not None:
         axes[0].imshow(reference)
     axes[0].set_title("input")
@@ -231,8 +232,8 @@ def _video_frames(
         ]
 
 
-def _render_video(
-    output: Path,
+def _render_temporal_frames(
+    output_dir: Path,
     *,
     tokens: np.ndarray,
     grid: tuple[int, ...],
@@ -242,7 +243,7 @@ def _render_video(
     size: int,
     fps: float,
     title: str,
-) -> None:
+) -> list[Path]:
     if len(grid) < 3:
         raise ValueError("Temporal visualization requires a temporal token grid.")
     temporal = int(np.prod(grid[:-2]))
@@ -264,28 +265,22 @@ def _render_video(
     else:
         references = [_load_image(reference_image)] * temporal
 
-    plt = _pyplot()
-    with tempfile.TemporaryDirectory(prefix="jepas_viz_") as directory:
-        for index in range(temporal):
-            frame = Path(directory) / f"frame_{index:04d}.png"
-            _render_static(
-                frame,
-                reference=references[index],
-                pca_rgb=rgb[index],
-                pc1=pc1[index],
-                labels=labels[index],
-                title=f"{title} | slice {index}",
-            )
-        plt.close("all")
-        subprocess.run(
-            [
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                "-framerate", str(fps), "-i", str(Path(directory) / "frame_%04d.png"),
-                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-                str(output),
-            ],
-            check=True,
+    del fps
+    for stale in output_dir.glob("visualization_frame_*.png"):
+        stale.unlink()
+    frames = []
+    for index in range(temporal):
+        frame = output_dir / f"visualization_frame_{index:03d}.png"
+        _render_static(
+            frame,
+            reference=references[index],
+            pca_rgb=rgb[index],
+            pc1=pc1[index],
+            labels=labels[index],
+            title=f"{title} | slice {index}",
         )
+        frames.append(frame)
+    return frames
 
 
 def parse_args() -> argparse.Namespace:
@@ -311,7 +306,10 @@ def main() -> None:
     embedding = args.embedding.resolve()
     output_dir = args.out_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("MPLCONFIGDIR", str(output_dir / ".matplotlib"))
+    os.environ.setdefault(
+        "MPLCONFIGDIR",
+        str(Path(tempfile.gettempdir()) / "jepas-matplotlib"),
+    )
     raw = _load_embedding(embedding, args.key)
     tokens, grid = _prepare_tokens(
         raw,
@@ -332,11 +330,10 @@ def main() -> None:
         labels=labels,
         title=title,
     )
-    video = None
+    frames: list[Path] = []
     if args.animate:
-        video = output_dir / "visualization.mp4"
-        _render_video(
-            video,
+        frames = _render_temporal_frames(
+            output_dir,
             tokens=tokens,
             grid=grid,
             reference_image=args.image,
@@ -354,8 +351,8 @@ def main() -> None:
         "slice_index": selected_slice,
         "pca_explained_variance": pca["pca_explained_variance"],
         "figure": figure.name,
-        "video": video.name if video else None,
-        "video_expected": bool(args.animate),
+        "frames": [frame.name for frame in frames],
+        "temporal_expected": bool(args.animate),
         "visualization": {
             "sample_index": args.sample_index,
             "tubelet_size": args.tubelet_size,

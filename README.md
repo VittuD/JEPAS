@@ -63,17 +63,22 @@ the default only after validation succeeds.
 
 ## Browse experiments
 
-The tracked browser discovers visualized new-schema experiments without generating
-per-run HTML or composite pages:
+The tracked marimo notebook discovers visualized new-schema experiments and
+reactively renders their input-by-model grid. Open `visualization/browser.py` with
+the marimo VS Code extension, or launch the editable notebook from the terminal:
 
 ```bash
-.venv_vjepa2/bin/python visualization/serve.py
-# Open http://127.0.0.1:43871
-
-# Optional overrides
-.venv_vjepa2/bin/python visualization/serve.py \
-  --port 49127 --outputs /path/to/experiment/outputs
+.venv_vjepa2/bin/marimo edit visualization/browser.py
 ```
+
+For a read-only browser:
+
+```bash
+.venv_vjepa2/bin/marimo run visualization/browser.py
+```
+
+Use **Refresh experiments** after new outputs finish. The notebook omits
+extraction-only and legacy output directories.
 
 Pass `--device cuda --precision auto` on a CUDA host. Use `--dry-run` to inspect
 commands without loading checkpoints. See `experiments/README.md` for model,

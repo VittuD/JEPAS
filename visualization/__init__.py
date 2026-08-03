@@ -1,1 +1,1 @@
-"""Permanent browser for generated JEPA experiments."""
+"""Reactive notebook browser for generated JEPA experiments."""

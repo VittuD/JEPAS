@@ -23,11 +23,12 @@ Store repository paths relative to the checkout root.
 
 Generated experiments must use `experiments/outputs/<experiment>/<input>/<model>/`.
 The experiment root owns `manifest.json`; each result owns `input.jpg`,
-`embeddings.h5`, `visualization.png`, optional `visualization.mp4`, `metadata.json`,
-and `run.log`. HDF5 metadata must record token/pooled shapes and dtypes, model,
+`embeddings.h5`, `visualization.png`, optional numbered temporal-frame PNGs,
+`metadata.json`, and `run.log`. HDF5 metadata must record token/pooled shapes and dtypes, model,
 input, checkpoint, and extraction settings. Visualization metadata must declare
-its required image/video artifacts and carry forward extraction metadata so the
-HDF5 file can be safely removed. Do not add generated HTML or composite pages.
+its required static/temporal artifacts and carry forward extraction metadata so the
+HDF5 file can be safely removed. Keep browsing logic in the tracked marimo
+notebook and its schema scanner; do not add generated HTML or composite pages.
 
 ## Check changes
 

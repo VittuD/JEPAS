@@ -16,7 +16,7 @@ SCHEMA_VERSION = 1
 SCHEMA_NAME = "jepas-experiment-v1"
 EMBEDDINGS_NAME = "embeddings.h5"
 FIGURE_NAME = "visualization.png"
-VIDEO_NAME = "visualization.mp4"
+FRAME_GLOB = "visualization_frame_*.png"
 METADATA_NAME = "metadata.json"
 
 
@@ -131,7 +131,13 @@ def load_visualization_metadata(directory: Path) -> dict[str, Any] | None:
     return metadata if isinstance(metadata, dict) else None
 
 
-def valid_visualization(directory: Path, *, require_video: bool | None = None) -> bool:
+def temporal_frame_paths(directory: Path) -> list[Path]:
+    return sorted(directory.glob(FRAME_GLOB))
+
+
+def valid_visualization(
+    directory: Path, *, require_temporal: bool | None = None
+) -> bool:
     metadata = load_visualization_metadata(directory)
     if metadata is None or metadata.get("schema") != SCHEMA_NAME:
         return False
@@ -153,25 +159,37 @@ def valid_visualization(directory: Path, *, require_video: bool | None = None) -
             image.verify()
     except (OSError, ValueError):
         return False
-    expected = bool(metadata.get("video_expected")) if require_video is None else require_video
-    video_name = metadata.get("video")
+    expected = (
+        bool(metadata.get("temporal_expected"))
+        if require_temporal is None
+        else require_temporal
+    )
+    frame_names = metadata.get("frames")
     if expected:
-        if video_name != VIDEO_NAME:
+        if not isinstance(frame_names, list) or not frame_names:
             return False
-        video = directory / VIDEO_NAME
-        if not video.is_file() or video.stat().st_size == 0:
+        expected_names = [f"visualization_frame_{index:03d}.png" for index in range(len(frame_names))]
+        if frame_names != expected_names:
             return False
-    elif video_name not in (None, VIDEO_NAME):
+        try:
+            for name in frame_names:
+                with Image.open(directory / name) as image:
+                    image.verify()
+        except (OSError, ValueError):
+            return False
+    elif frame_names not in (None, []):
         return False
     return True
 
 
-def cleanup_embeddings(directory: Path, *, require_video: bool | None = None) -> bool:
+def cleanup_embeddings(
+    directory: Path, *, require_temporal: bool | None = None
+) -> bool:
     """Delete embeddings only after all declared visualization outputs validate."""
     embeddings = directory / EMBEDDINGS_NAME
     if not embeddings.exists():
         return False
-    if not valid_visualization(directory, require_video=require_video):
+    if not valid_visualization(directory, require_temporal=require_temporal):
         raise ValueError(
             f"Refusing to delete {embeddings}: visualization artifacts or metadata are invalid."
         )

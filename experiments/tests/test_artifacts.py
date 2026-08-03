@@ -24,8 +24,8 @@ class CleanupTest(unittest.TestCase):
         return {
             "schema": SCHEMA_NAME,
             "figure": "visualization.png",
-            "video": None,
-            "video_expected": False,
+            "frames": [],
+            "temporal_expected": False,
             "grid_shape": [2, 2],
             "pca_explained_variance": [0.5, 0.3, 0.2],
             "extraction": {
@@ -65,14 +65,17 @@ class CleanupTest(unittest.TestCase):
             self.assertFalse(embeddings.exists())
             self.assertFalse(cleanup_embeddings(directory))
 
-    def test_declared_video_must_exist_before_cleanup(self) -> None:
+    def test_declared_temporal_frames_must_exist_before_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             embeddings = self._embeddings(directory)
             Image.new("RGB", (8, 8)).save(directory / "visualization.png")
             metadata = self._metadata()
             metadata.update(
-                {"video": "visualization.mp4", "video_expected": True}
+                {
+                    "frames": ["visualization_frame_000.png"],
+                    "temporal_expected": True,
+                }
             )
             (directory / "metadata.json").write_text(
                 json.dumps(metadata)
@@ -116,7 +119,52 @@ class CleanupTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            self.assertTrue(valid_visualization(directory, require_video=False))
+            self.assertTrue(
+                valid_visualization(directory, require_temporal=False)
+            )
+            with Image.open(directory / "visualization.png") as visualization:
+                self.assertEqual(visualization.width, visualization.height)
+            self.assertFalse((directory / ".matplotlib").exists())
+
+    def test_visualizer_writes_numbered_temporal_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            embeddings = directory / "embeddings.h5"
+            tokens = np.arange(64, dtype=np.float32).reshape(1, 8, 8)
+            write_embeddings(
+                embeddings,
+                tokens,
+                metadata={"model": "test", "settings": {}},
+            )
+            Image.new("RGB", (8, 8), color=(10, 20, 30)).save(
+                directory / "input.jpg"
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "experiments/visualize.py",
+                    str(embeddings),
+                    "--out-dir",
+                    str(directory),
+                    "--grid-shape",
+                    "2x2x2",
+                    "--image",
+                    str(directory / "input.jpg"),
+                    "--animate",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            metadata = json.loads((directory / "metadata.json").read_text())
+            self.assertEqual(
+                metadata["frames"],
+                ["visualization_frame_000.png", "visualization_frame_001.png"],
+            )
+            self.assertTrue(
+                valid_visualization(directory, require_temporal=True)
+            )
 
 
 if __name__ == "__main__":

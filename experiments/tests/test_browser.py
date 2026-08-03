@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from visualization.serve import DEFAULT_PORT, discover_experiments, parse_args
+from visualization.catalog import discover_experiments
 
 
 class BrowserTest(unittest.TestCase):
@@ -31,7 +31,7 @@ class BrowserTest(unittest.TestCase):
                     {
                         "schema": "jepas-experiment-v1",
                         "figure": "visualization.png",
-                        "video": None,
+                        "frames": [],
                     }
                 )
             )
@@ -47,11 +47,33 @@ class BrowserTest(unittest.TestCase):
             self.assertEqual(len(discovered), 1)
             self.assertEqual(discovered[0]["rows"], ["dog"])
             self.assertEqual(discovered[0]["columns"], ["ijepa"])
-            self.assertIsNone(discovered[0]["cells"][0]["video"])
+            self.assertEqual(discovered[0]["results"][0]["frames"], [])
+            self.assertEqual(
+                discovered[0]["results"][0]["image"],
+                result / "visualization.png",
+            )
 
-    def test_default_and_custom_ports(self) -> None:
-        self.assertEqual(parse_args([]).port, DEFAULT_PORT)
-        self.assertEqual(parse_args(["--port", "49127"]).port, 49127)
+    def test_inference_blueprints_include_visualization_requirements(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        for name in ("vjepa2_inference.txt", "vjepa2_inference_cuda.txt"):
+            requirements = (root / "requirements" / name).read_text().splitlines()
+            self.assertIn("-r visualization.txt", requirements)
+
+    def test_notebook_uses_compact_shared_frame_inspector(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        notebook = (root / "visualization" / "browser.py").read_text()
+
+        self.assertIn("mo.ui.run_button(", notebook)
+        self.assertIn('label="Refresh experiments"', notebook)
+        self.assertIn("refresh_experiments.value", notebook)
+        self.assertIn('label="Experiment"', notebook)
+        self.assertIn('label="Input"', notebook)
+        self.assertIn('label="Frame"', notebook)
+        self.assertIn("mo.ui.slider(", notebook)
+        self.assertNotIn("mo.carousel(", notebook)
+        self.assertNotIn("mo.Html(", notebook)
+        self.assertEqual(notebook.count("mo.image("), 1)
+        self.assertNotIn("mo.video(", notebook)
 
 
 if __name__ == "__main__":

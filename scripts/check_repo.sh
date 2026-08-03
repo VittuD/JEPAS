@@ -15,6 +15,7 @@ cd "${ROOT_DIR}"
 
 bash -n scripts/*.sh weights/*.sh
 "${PYTHON}" -m compileall -q experiments visualization
+"${PYTHON}" -m marimo check --strict visualization/browser.py
 "${PYTHON}" -m unittest \
   experiments.tests.test_compare \
   experiments.tests.test_artifacts \
