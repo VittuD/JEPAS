@@ -14,9 +14,11 @@ fi
 cd "${ROOT_DIR}"
 
 bash -n scripts/*.sh weights/*.sh
-"${PYTHON}" -m compileall -q experiments
+"${PYTHON}" -m compileall -q experiments visualization
 "${PYTHON}" -m unittest \
   experiments.tests.test_compare \
+  experiments.tests.test_artifacts \
+  experiments.tests.test_browser \
   experiments.tests.test_extract \
   experiments.tests.test_provenance \
   experiments.tests.test_ijepa_lite

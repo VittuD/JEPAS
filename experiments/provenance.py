@@ -95,6 +95,7 @@ def run_command(
     *,
     cwd: Path,
     log_path: Path | None = None,
+    log_mode: str = "w",
 ) -> None:
     print("+", shlex.join(command), flush=True)
     if log_path is None:
@@ -102,7 +103,7 @@ def run_command(
         return
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w") as log:
+    with log_path.open(log_mode) as log:
         process = subprocess.Popen(
             command,
             cwd=cwd,

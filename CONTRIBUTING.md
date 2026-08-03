@@ -21,6 +21,14 @@ functions. Add shared infrastructure only when two active experiments need it.
 Record the command, checkpoint, source revision, runtime, and token geometry.
 Store repository paths relative to the checkout root.
 
+Generated experiments must use `experiments/outputs/<experiment>/<input>/<model>/`.
+The experiment root owns `manifest.json`; each result owns `input.jpg`,
+`embeddings.h5`, `visualization.png`, optional `visualization.mp4`, `metadata.json`,
+and `run.log`. HDF5 metadata must record token/pooled shapes and dtypes, model,
+input, checkpoint, and extraction settings. Visualization metadata must declare
+its required image/video artifacts and carry forward extraction metadata so the
+HDF5 file can be safely removed. Do not add generated HTML or composite pages.
+
 ## Check changes
 
 ```bash

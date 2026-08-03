@@ -23,6 +23,13 @@ from experiments.catalog import (  # noqa: E402
     canonical_model_name,
     model_specs,
 )
+from experiments.artifacts import (  # noqa: E402
+    EMBEDDINGS_NAME,
+    SCHEMA_NAME,
+    read_embedding_metadata,
+    valid_embeddings,
+    write_embeddings,
+)
 from experiments.device import add_runtime_arguments, resolve_runtime  # noqa: E402
 from experiments.provenance import (  # noqa: E402
     file_provenance,
@@ -101,8 +108,8 @@ def extraction_command(
             f"{spec.name} accepts {', '.join(spec.input_kinds)}, not {kind or 'unknown'}."
         )
 
-    tokens = output_dir / "tokens.npy"
-    preview = output_dir / ("input.png" if kind == "volume" else "input.jpg")
+    adapter_output = output_dir / ".tokens.npy"
+    preview = output_dir / "input.jpg"
     command = [
         portable_path(Path(sys.executable)),
         portable_path(spec.adapter),
@@ -116,7 +123,7 @@ def extraction_command(
         "--seed",
         str(seed),
         "--output-embedding",
-        portable_path(tokens),
+        portable_path(adapter_output),
     ]
     if kind == "volume":
         command.extend(
@@ -140,7 +147,7 @@ def extraction_command(
             command.extend(("--image-size", str(image_size)))
         if "video" in spec.input_kinds:
             command.extend(("--frames", str(frames)))
-    return command, tokens, preview
+    return command, adapter_output, preview
 
 
 def extract_one(
@@ -154,13 +161,14 @@ def extract_one(
     image_size: int | None,
     frames: int,
     seed: int = 0,
+    metadata_input: Path | None = None,
     force: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     weights = (weights or spec.weights_path).expanduser().resolve()
     input_path = input_path.expanduser().resolve()
     output_dir = output_dir.expanduser().resolve()
-    command, tokens_path, preview_path = extraction_command(
+    command, adapter_output, preview_path = extraction_command(
         spec,
         weights=weights,
         input_path=input_path,
@@ -171,7 +179,7 @@ def extract_one(
         frames=frames,
         seed=seed,
     )
-    pooled_path = output_dir / "pooled.npy"
+    embeddings_path = output_dir / EMBEDDINGS_NAME
 
     if dry_run:
         return {"command": shlex.join(command), "status": "planned"}
@@ -182,31 +190,41 @@ def extract_one(
         if not required.exists():
             raise FileNotFoundError(required)
 
-    if force or not (tokens_path.exists() and pooled_path.exists() and preview_path.exists()):
+    if force or not (valid_embeddings(embeddings_path) and preview_path.exists()):
         output_dir.mkdir(parents=True, exist_ok=True)
         run_command(command, cwd=ROOT_DIR, log_path=output_dir / "run.log")
-        tokens = np.load(tokens_path)
-        if tokens.ndim < 2:
-            raise ValueError(f"Expected token embeddings, got {tokens.shape}.")
-        np.save(pooled_path, tokens.astype(np.float32).mean(axis=-2, dtype=np.float32))
+        if not adapter_output.is_file():
+            raise FileNotFoundError(adapter_output)
+        tokens = np.load(adapter_output, mmap_mode="r")
+        recorded_input = (metadata_input or input_path).expanduser().resolve()
+        extraction_metadata = {
+            "model": spec.name,
+            "input_kind": path_kind(recorded_input),
+            "input": portable_path(recorded_input),
+            "checkpoint": portable_path(checkpoint),
+            "preview": preview_path.name,
+            "command": shlex.join(command),
+            "settings": {
+                "device": device,
+                "precision": precision,
+                "image_size": image_size,
+                "frames": frames,
+                "seed": seed,
+            },
+        }
+        write_embeddings(embeddings_path, tokens, metadata=extraction_metadata)
+        del tokens
+        adapter_output.unlink()
         status = "computed"
     else:
         status = "reused"
 
-    tokens = np.load(tokens_path, mmap_mode="r")
-    pooled = np.load(pooled_path, mmap_mode="r")
+    stored = read_embedding_metadata(embeddings_path)
     return {
-        "model": spec.name,
-        "input_kind": path_kind(input_path),
-        "input": portable_path(input_path),
-        "checkpoint": portable_path(checkpoint),
+        **stored,
         "output_dir": portable_path(output_dir),
-        "tokens": portable_path(tokens_path),
-        "pooled": portable_path(pooled_path),
+        "embeddings": portable_path(embeddings_path),
         "preview": portable_path(preview_path),
-        "token_shape": list(tokens.shape),
-        "pooled_shape": list(pooled.shape),
-        "command": shlex.join(command),
         "status": status,
     }
 
@@ -248,7 +266,7 @@ def main() -> None:
         record = extract_one(
             spec,
             input_path,
-            args.output_dir / input_stem(input_path),
+            args.output_dir / input_stem(input_path) / spec.name,
             weights=args.weights,
             device=device,
             precision=precision,
@@ -267,6 +285,9 @@ def main() -> None:
     weights = (args.weights or spec.weights_path).expanduser().resolve()
     checkpoint = checkpoint_for(spec, weights)
     manifest = {
+        "schema": SCHEMA_NAME,
+        "schema_version": 1,
+        "experiment": args.output_dir.name,
         "model": spec.name,
         "device": device,
         "precision": precision,

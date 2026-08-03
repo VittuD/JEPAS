@@ -1,28 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-import numpy as np
-import torch
-import torch.nn.functional as F
 from PIL import Image
 
-from experiments.compare import load_maps, resolution_for, selected_pairs
-from experiments.catalog import model_specs
-from experiments.visualize import (
-    _prepare_tokens,
-    _select_2d_tokens,
-    _token_pca_maps,
-)
+from experiments.artifacts import SCHEMA_NAME
+from experiments.catalog import media_specs, model_specs
+from experiments.compare import resolution_for, run_pair, selected_pairs
 
 
-class LoadMapsTest(unittest.TestCase):
+class ComparisonTest(unittest.TestCase):
     def test_native_resolution_comes_from_catalog(self) -> None:
         spec = model_specs()["vjepa2-1-vitb"]
-
         self.assertEqual(resolution_for(spec, "native"), 384)
 
     def test_matched_pairing_uses_domain_examples(self) -> None:
@@ -31,53 +25,57 @@ class LoadMapsTest(unittest.TestCase):
             inputs=None,
             pairing="matched",
         )
-
         pairs = selected_pairs(args)
-
         self.assertEqual(
             [(model.name, media.name) for model, media in pairs],
             [("ijepa", "dog"), ("echojepa", "echonet")],
         )
 
-    def test_uses_first_temporal_slice(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            rng = np.random.default_rng(7)
-            embedding = rng.normal(size=(1, 8, 6)).astype(np.float32)
-            embedding[:, 4:, :] += np.asarray(
-                [4.0, -3.0, 2.0, 0.0, 1.0, -2.0],
-                dtype=np.float32,
+    def test_completed_visualization_resumes_without_extraction(self) -> None:
+        model = model_specs()["ijepa"]
+        media = media_specs()["dog"]
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "comparison"
+            pair_dir = run_dir / media.name / model.name
+            pair_dir.mkdir(parents=True)
+            Image.new("RGB", (8, 8), color=(32, 64, 96)).save(
+                pair_dir / "visualization.png"
             )
-            embedding_path = root / "tokens.npy"
-            np.save(embedding_path, embedding)
-
-            preview_path = root / "input_frame.jpg"
-            Image.new("RGB", (8, 8), color=(32, 64, 96)).save(preview_path)
-            record = {
-                "tokens": str(embedding_path),
-                "spatial_grid": [2, 2],
-                "temporal_grid": 2,
-                "reference": str(preview_path),
+            metadata = {
+                "schema": SCHEMA_NAME,
+                "figure": "visualization.png",
+                "video": None,
+                "video_expected": False,
+                "grid_shape": [2, 2],
+                "pca_explained_variance": [0.5, 0.3, 0.2],
+                "extraction": {
+                    "token_shape": [1, 4, 8],
+                    "token_dtype": "<f4",
+                    "pooled_shape": [1, 8],
+                    "pooled_dtype": "<f4",
+                },
             }
-            _, rendered_pca, _, _ = load_maps(record)
+            (pair_dir / "metadata.json").write_text(json.dumps(metadata))
 
-            tokens, grid = _prepare_tokens(
-                embedding,
-                sample_index=None,
-                grid_shape=(2, 2, 2),
-            )
-            tokens = F.layer_norm(
-                torch.from_numpy(tokens),
-                (tokens.shape[-1],),
-            ).numpy()
-            selected, grid_2d, _ = _select_2d_tokens(
-                tokens,
-                grid,
-                slice_index=0,
-            )
-            expected_pca, _, _ = _token_pca_maps(selected, grid_2d)
+            with mock.patch(
+                "experiments.compare.extract_one",
+                side_effect=AssertionError("extraction should not run"),
+            ):
+                record = run_pair(
+                    model,
+                    media,
+                    first_frames={},
+                    run_dir=run_dir,
+                    resolution_value="224",
+                    frames=16,
+                    device="cpu",
+                    precision="float32",
+                    force=False,
+                    keep_embeddings=False,
+                )
 
-            np.testing.assert_allclose(rendered_pca, expected_pca)
+            self.assertEqual(record["status"], "reused")
+            self.assertIsNone(record["embeddings"])
 
 
 if __name__ == "__main__":

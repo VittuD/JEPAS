@@ -8,6 +8,7 @@ import json
 import math
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from experiments.artifacts import SCHEMA_NAME, read_embedding_metadata
 
 
 def _pyplot():
@@ -37,31 +43,13 @@ def _parse_grid_shape(raw: str | None) -> tuple[int, ...] | None:
 
 
 def _load_embedding(path: Path, key: str | None = None) -> np.ndarray:
-    if path.suffix == ".npy":
-        return np.load(path)
-    if path.suffix == ".npz":
-        values = np.load(path)
-        keys = list(values)
-        selected = key or (keys[0] if len(keys) == 1 else None)
-        if selected is None:
-            raise ValueError(f"{path} contains {keys}; pass --key.")
-        return values[selected]
-    value = torch.load(path, map_location="cpu")
-    if isinstance(value, dict):
-        keys = [
-            name
-            for name, item in value.items()
-            if isinstance(item, (torch.Tensor, np.ndarray))
-        ]
-        selected = key or (keys[0] if len(keys) == 1 else None)
-        if selected is None:
-            raise ValueError(f"{path} contains tensor keys {keys}; pass --key.")
-        value = value[selected]
-    if isinstance(value, torch.Tensor):
-        return value.detach().cpu().numpy()
-    if isinstance(value, np.ndarray):
-        return value
-    raise TypeError(f"Unsupported embedding object: {type(value).__name__}")
+    import h5py
+
+    selected = key or "tokens"
+    with h5py.File(path, "r") as handle:
+        if selected not in handle:
+            raise ValueError(f"{path} has no {selected!r} dataset.")
+        return handle[selected][...]
 
 
 def _prepare_tokens(
@@ -359,12 +347,22 @@ def main() -> None:
             title=title,
         )
     metadata = {
-        "embedding": str(args.embedding),
+        "schema": SCHEMA_NAME,
+        "embedding": embedding.name,
+        "extraction": read_embedding_metadata(embedding),
         "grid_shape": list(grid),
         "slice_index": selected_slice,
         "pca_explained_variance": pca["pca_explained_variance"],
         "figure": figure.name,
         "video": video.name if video else None,
+        "video_expected": bool(args.animate),
+        "visualization": {
+            "sample_index": args.sample_index,
+            "tubelet_size": args.tubelet_size,
+            "reference_size": args.reference_size,
+            "animation_fps": args.animation_fps,
+            "title": title,
+        },
     }
     (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(f"visualization={figure}")

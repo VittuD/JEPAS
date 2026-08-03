@@ -194,7 +194,7 @@ def main() -> None:
         import numpy as np
 
         args.output_embedding.parent.mkdir(parents=True, exist_ok=True)
-        np.save(args.output_embedding, tokens.detach().float().cpu().numpy())
+        np.save(args.output_embedding, tokens.detach().cpu().numpy())
     if args.output_preprocessed_slice is not None:
         save_middle_slice(args.output_preprocessed_slice, preprocessed_volume)
 

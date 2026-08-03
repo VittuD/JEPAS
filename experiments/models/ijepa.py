@@ -123,7 +123,7 @@ def main() -> None:
         import numpy as np
 
         args.output_embedding.parent.mkdir(parents=True, exist_ok=True)
-        np.save(args.output_embedding, embedding.detach().float().cpu().numpy())
+        np.save(args.output_embedding, embedding.detach().cpu().numpy())
     if args.output_preprocessed_image is not None and preprocessed_image is not None:
         args.output_preprocessed_image.parent.mkdir(parents=True, exist_ok=True)
         preprocessed_image.save(args.output_preprocessed_image)

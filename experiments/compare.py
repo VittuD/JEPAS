@@ -4,25 +4,27 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
-import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-import torch
-import torch.nn.functional as F
-from PIL import Image
-
-
 ROOT_DIR = Path(__file__).resolve().parents[1]
-OUTPUT_ROOT = ROOT_DIR / "experiments" / "outputs" / "comparisons"
+OUTPUT_ROOT = ROOT_DIR / "experiments" / "outputs"
 sys.path.insert(0, str(ROOT_DIR))
 
+from experiments.artifacts import (  # noqa: E402
+    EMBEDDINGS_NAME,
+    FIGURE_NAME,
+    SCHEMA_NAME,
+    VIDEO_NAME,
+    cleanup_embeddings,
+    load_visualization_metadata,
+    valid_visualization,
+)
 from experiments.catalog import (  # noqa: E402
     MATCHED_INPUT,
     MediaSpec,
@@ -39,12 +41,6 @@ from experiments.provenance import (  # noqa: E402
     portable_path,
     run_command,
 )
-from experiments.visualize import (  # noqa: E402
-    _kmeans_map,
-    _prepare_tokens,
-    _select_2d_tokens,
-    _token_pca_maps,
-)
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inputs", nargs="+", choices=tuple(media_specs()))
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
+    parser.add_argument("--keep-embeddings", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     add_runtime_arguments(parser)
@@ -89,17 +86,6 @@ def selected_pairs(args: argparse.Namespace) -> list[tuple[ModelSpec, MediaSpec]
     return pairs
 
 
-def square_image(source: Path, destination: Path, resolution: int) -> None:
-    image = Image.open(source).convert("RGB")
-    side = min(image.size)
-    left = (image.width - side) // 2
-    top = (image.height - side) // 2
-    image = image.crop((left, top, left + side, top + side))
-    image = image.resize((resolution, resolution), Image.Resampling.BICUBIC)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    image.save(destination, quality=95)
-
-
 def first_video_frame(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
@@ -113,31 +99,13 @@ def first_video_frame(source: Path, destination: Path) -> None:
 
 def prepare_inputs(
     pairs: list[tuple[ModelSpec, MediaSpec]],
-    run_dir: Path,
-    resolution_value: str,
-    *,
-    force: bool,
-) -> tuple[dict[str, Path], dict[tuple[str, int], Path]]:
+    temporary_dir: Path,
+) -> dict[str, Path]:
     first_frames: dict[str, Path] = {}
-    references: dict[tuple[str, int], Path] = {}
-    input_dir = run_dir / "inputs"
-    for _model, media in pairs:
-        if media.modality == "video" and media.name not in first_frames:
-            frame = input_dir / f"{media.name}_frame0.jpg"
-            if force or not frame.exists():
-                first_video_frame(media.path, frame)
-            first_frames[media.name] = frame
     for model, media in pairs:
-        resolution = resolution_for(model, resolution_value)
-        key = (media.name, resolution)
-        if key in references:
-            continue
-        source = first_frames[media.name] if media.modality == "video" else media.path
-        reference = input_dir / f"{media.name}_{resolution}.jpg"
-        if force or not reference.exists():
-            square_image(source, reference, resolution)
-        references[key] = reference
-    return first_frames, references
+        if model.modality == "image" and media.modality == "video":
+            first_frames.setdefault(media.name, temporary_dir / f"{media.name}_frame0.jpg")
+    return first_frames
 
 
 def effective_input(
@@ -146,7 +114,10 @@ def effective_input(
     first_frames: dict[str, Path],
 ) -> tuple[Path, str]:
     if model.modality == "image" and media.modality == "video":
-        return first_frames[media.name], "video_frame0_to_image"
+        frame = first_frames[media.name]
+        if not frame.exists():
+            first_video_frame(media.path, frame)
+        return frame, "video_frame0_to_image"
     if model.modality == "video" and media.modality == "image":
         return media.path, "image_repeated_as_video"
     return media.path, "native"
@@ -154,7 +125,7 @@ def effective_input(
 
 def visualization_command(
     *,
-    tokens: Path,
+    embeddings: Path,
     output_dir: Path,
     reference: Path,
     reference_video: Path | None,
@@ -169,7 +140,7 @@ def visualization_command(
     command = [
         portable_path(Path(sys.executable)),
         "experiments/visualize.py",
-        portable_path(tokens),
+        portable_path(embeddings),
         "--out-dir",
         portable_path(output_dir),
         "--grid-shape",
@@ -193,16 +164,51 @@ def run_pair(
     media: MediaSpec,
     *,
     first_frames: dict[str, Path],
-    references: dict[tuple[str, int], Path],
     run_dir: Path,
     resolution_value: str,
     frames: int,
     device: str,
     precision: str,
     force: bool,
+    keep_embeddings: bool,
 ) -> dict[str, Any]:
     resolution = resolution_for(model, resolution_value)
     pair_dir = run_dir / media.name / model.name
+    if model.modality == "image" and media.modality == "video":
+        adaptation = "video_frame0_to_image"
+    elif model.modality == "video" and media.modality == "image":
+        adaptation = "image_repeated_as_video"
+    else:
+        adaptation = "native"
+    requires_video = model.modality == "video"
+    if not force and valid_visualization(pair_dir, require_video=requires_video):
+        if not keep_embeddings:
+            cleanup_embeddings(pair_dir, require_video=requires_video)
+        metadata = load_visualization_metadata(pair_dir)
+        assert metadata is not None
+        extraction = metadata["extraction"]
+        return {
+            "model": model.name,
+            "input": media.name,
+            "input_modality": media.modality,
+            "model_modality": model.modality,
+            "adaptation": adaptation,
+            "resolution": resolution,
+            "patch_size": model.patch_size,
+            "spatial_grid": [resolution // model.patch_size] * 2,
+            "temporal_grid": frames // 2 if requires_video else None,
+            "embeddings": portable_path(pair_dir / EMBEDDINGS_NAME)
+            if (pair_dir / EMBEDDINGS_NAME).exists()
+            else None,
+            "token_shape": extraction["token_shape"],
+            "token_dtype": extraction["token_dtype"],
+            "pooled_shape": extraction["pooled_shape"],
+            "pooled_dtype": extraction["pooled_dtype"],
+            "preview": portable_path(pair_dir / "input.jpg"),
+            "figure": portable_path(pair_dir / FIGURE_NAME),
+            "video": portable_path(pair_dir / VIDEO_NAME) if requires_video else None,
+            "status": "reused",
+        }
     source, adaptation = effective_input(model, media, first_frames)
     extraction = extract_one(
         model,
@@ -212,24 +218,32 @@ def run_pair(
         precision=precision,
         image_size=resolution,
         frames=frames,
+        metadata_input=media.path,
         force=force,
     )
-    reference = references[(media.name, resolution)]
-    visualization_dir = pair_dir / "visualization"
     command = visualization_command(
-        tokens=Path(extraction["tokens"]),
-        output_dir=visualization_dir,
-        reference=reference,
+        embeddings=Path(extraction["embeddings"]),
+        output_dir=pair_dir,
+        reference=pair_dir / "input.jpg",
         reference_video=source if model.modality == "video" and media.modality == "video" else None,
         model=model,
         media=media,
         resolution=resolution,
         frames=frames,
     )
-    figure = visualization_dir / "visualization.png"
-    video = visualization_dir / "visualization.mp4"
-    if force or not figure.exists() or (model.modality == "video" and not video.exists()):
-        run_command(command, cwd=ROOT_DIR, log_path=pair_dir / "visualize.log")
+    figure = pair_dir / FIGURE_NAME
+    video = pair_dir / VIDEO_NAME
+    if force or not valid_visualization(pair_dir, require_video=requires_video):
+        run_command(
+            command,
+            cwd=ROOT_DIR,
+            log_path=pair_dir / "run.log",
+            log_mode="a",
+        )
+    if not valid_visualization(pair_dir, require_video=requires_video):
+        raise RuntimeError(f"Visualization did not produce valid artifacts in {pair_dir}.")
+    if not keep_embeddings:
+        cleanup_embeddings(pair_dir, require_video=requires_video)
     return {
         "model": model.name,
         "input": media.name,
@@ -239,95 +253,19 @@ def run_pair(
         "resolution": resolution,
         "patch_size": model.patch_size,
         "spatial_grid": [resolution // model.patch_size] * 2,
-        "temporal_grid": frames // 2 if model.modality == "video" else None,
-        "tokens": extraction["tokens"],
-        "pooled": extraction["pooled"],
+        "temporal_grid": frames // 2 if requires_video else None,
+        "embeddings": extraction["embeddings"] if keep_embeddings else None,
         "token_shape": extraction["token_shape"],
-        "reference": portable_path(reference),
+        "token_dtype": extraction["token_dtype"],
+        "pooled_shape": extraction["pooled_shape"],
+        "pooled_dtype": extraction["pooled_dtype"],
+        "preview": extraction["preview"],
         "figure": portable_path(figure),
         "video": portable_path(video) if video.exists() else None,
         "extract_command": extraction["command"],
         "visualize_command": shlex.join(command),
+        "status": "computed",
     }
-
-
-def load_maps(record: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    embedding = np.load(ROOT_DIR / record["tokens"])
-    spatial = tuple(record["spatial_grid"])
-    temporal = record["temporal_grid"]
-    grid = (temporal, *spatial) if temporal is not None else spatial
-    tokens, grid = _prepare_tokens(embedding, sample_index=None, grid_shape=grid)
-    tokens = F.layer_norm(torch.from_numpy(tokens), (tokens.shape[-1],)).numpy()
-    selected, grid_2d, _ = _select_2d_tokens(tokens, grid, 0 if temporal else None)
-    pca_rgb, pc1, _ = _token_pca_maps(selected, grid_2d)
-    labels = _kmeans_map(selected, grid_2d, 4)
-    reference = np.asarray(Image.open(ROOT_DIR / record["reference"]).convert("RGB"))
-    return reference, pca_rgb, pc1, labels
-
-
-def render_comparisons(records: list[dict[str, Any]], output_dir: Path) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("MPLCONFIGDIR", str(output_dir / ".matplotlib"))
-    import matplotlib
-
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt
-
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for record in sorted(records, key=lambda item: (item["input"], item["model"])):
-        grouped.setdefault(record["input"], []).append(record)
-    for input_name, rows in grouped.items():
-        figure, axes = plt.subplots(
-            len(rows), 4, figsize=(12, 2.8 * len(rows)), squeeze=False, layout="constrained"
-        )
-        for column, title in enumerate(("input", "PCA RGB", "PC1", "KMeans (k=4)")):
-            axes[0, column].set_title(title)
-        for row, record in enumerate(rows):
-            reference, pca_rgb, pc1, labels = load_maps(record)
-            axes[row, 0].imshow(reference)
-            axes[row, 1].imshow(pca_rgb, interpolation="nearest")
-            axes[row, 2].imshow(pc1, interpolation="nearest", cmap="magma")
-            axes[row, 3].imshow(labels, interpolation="nearest", cmap="tab10", vmin=0, vmax=9)
-            axes[row, 0].set_ylabel(record["model"])
-            for axis in axes[row]:
-                axis.set_xticks([])
-                axis.set_yticks([])
-        figure.savefig(output_dir / f"{input_name}.png", dpi=160)
-        plt.close(figure)
-
-
-def write_index(records: list[dict[str, Any]], run_dir: Path) -> None:
-    rows = []
-    for record in sorted(records, key=lambda item: (item["input"], item["model"])):
-        figure = os.path.relpath(ROOT_DIR / record["figure"], run_dir)
-        video_path = (
-            os.path.relpath(ROOT_DIR / record["video"], run_dir)
-            if record["video"]
-            else None
-        )
-        video = (
-            f'<a href="{html.escape(video_path)}">video</a>'
-            if video_path is not None
-            else ""
-        )
-        rows.append(
-            "<tr>"
-            f"<th>{html.escape(record['input'])}</th>"
-            f"<th>{html.escape(record['model'])}</th>"
-            f'<td><a href="{html.escape(figure)}"><img src="{html.escape(figure)}"></a></td>'
-            f"<td>{video}</td>"
-            "</tr>"
-        )
-    document = """<!doctype html><meta charset="utf-8"><title>JEPA comparison</title>
-<style>
-body{font:14px sans-serif;margin:24px} table{border-collapse:collapse}
-th,td{border:1px solid #ccc;padding:8px;text-align:left}
-img{width:720px;max-width:75vw;height:auto}
-</style>
-<h1>JEPA comparison</h1>
-<table><tr><th>Input</th><th>Model</th><th>Visualization</th><th>Temporal</th></tr>
-""" + "\n".join(rows) + "\n</table>\n"
-    (run_dir / "index.html").write_text(document)
 
 
 def dry_run(args: argparse.Namespace, pairs: list[tuple[ModelSpec, MediaSpec]]) -> None:
@@ -335,7 +273,7 @@ def dry_run(args: argparse.Namespace, pairs: list[tuple[ModelSpec, MediaSpec]]) 
         resolution = resolution_for(model, args.resolution)
         output = (
             args.output_root
-            / f"{args.pairing}_{args.resolution}"
+            / f"comparison_{args.pairing}_{args.resolution}"
             / media.name
             / model.name
         )
@@ -343,8 +281,7 @@ def dry_run(args: argparse.Namespace, pairs: list[tuple[ModelSpec, MediaSpec]]) 
         if model.modality == "image" and media.modality == "video":
             source = (
                 args.output_root
-                / f"{args.pairing}_{args.resolution}"
-                / "inputs"
+                / f"comparison_{args.pairing}_{args.resolution}"
                 / f"{media.name}_frame0.jpg"
             )
         command, _, _ = extraction_command(
@@ -372,36 +309,37 @@ def main() -> None:
 
     runtime = resolve_runtime(args.device, args.precision)
     device, precision = runtime.device.type, runtime.precision
-    run_dir = args.output_root / f"{args.pairing}_{args.resolution}"
-    first_frames, references = prepare_inputs(
-        pairs, run_dir, args.resolution, force=args.force
-    )
-    records = [
-        run_pair(
-            model,
-            media,
-            first_frames=first_frames,
-            references=references,
-            run_dir=run_dir,
-            resolution_value=args.resolution,
-            frames=args.frames,
-            device=device,
-            precision=precision,
-            force=args.force,
-        )
-        for model, media in pairs
-    ]
-    render_comparisons(records, run_dir / "comparisons")
-    write_index(records, run_dir)
+    run_dir = args.output_root / f"comparison_{args.pairing}_{args.resolution}"
+    with tempfile.TemporaryDirectory(prefix="jepas_compare_") as temporary:
+        first_frames = prepare_inputs(pairs, Path(temporary))
+        records = [
+            run_pair(
+                model,
+                media,
+                first_frames=first_frames,
+                run_dir=run_dir,
+                resolution_value=args.resolution,
+                frames=args.frames,
+                device=device,
+                precision=precision,
+                force=args.force,
+                keep_embeddings=args.keep_embeddings,
+            )
+            for model, media in pairs
+        ]
 
     models = model_specs()
     used_models = list(dict.fromkeys(record["model"] for record in records))
     manifest = {
+        "schema": SCHEMA_NAME,
+        "schema_version": 1,
+        "experiment": run_dir.name,
         "pairing": args.pairing,
         "resolution": args.resolution,
         "frames": args.frames,
         "device": device,
         "precision": precision,
+        "keep_embeddings": args.keep_embeddings,
         "models": {
             name: {
                 "checkpoint": file_provenance(models[name].checkpoint_path, include_hash=False),
