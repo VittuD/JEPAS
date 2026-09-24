@@ -42,7 +42,12 @@ INPUTS[rsna]="${DS}/medical/rsna-pneumonia-detection-challenge/stage_2_test_imag
 INPUTS[diving48]="${DS}/video/diving48/rgb"
 INPUTS[echonet]="${DS}/eidos-datasets/data-registry/medical/cardio/catdx/StanfordDataset/Videos"
 INPUTS[kinetics]="/leonardo/prod/data/ai/kinetics/kinetics400/256/val"
-INPUTS[epic-kitchens]="$(echo /leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100/P*/videos)"
+# EPIC recordings are minutes to half an hour long, so cut seeded 10 s windows first.
+EPIC_CLIPS="${FAST}/datasets_derived/epic-kitchens_clips10s_n${N}_seed${SEED}"
+INPUTS[epic-kitchens]="${EPIC_CLIPS}"
+
+python scripts/make_epic_clips.py --root /leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100 \
+  --out-dir "${EPIC_CLIPS}" --n "${N}" --seed "${SEED}" --workers "${SLURM_CPUS_PER_TASK}" || exit 1
 
 NGPU=4
 CPUS_PER_JOB=$(( SLURM_CPUS_PER_TASK / NGPU ))
