@@ -6,8 +6,9 @@
 #
 # Fair-comparison design: every model sees the SAME sampled inputs per dataset
 # (sampling depends only on dataset, kind and seed, not on the model), at its own
-# native resolution. Image-only models (ijepa, radjepa) run on image datasets only;
-# video-capable models run on image datasets (frame repeated) and on video datasets.
+# native resolution. Image models (ijepa, radjepa) run on image datasets; video
+# models run on video datasets. A video model on an image would repeat the frame
+# across tubelets, which token_metrics' 3D grid cannot treat as a real image.
 #SBATCH --job-name=jepas_bulk
 #SBATCH --account=IscrC_PRIMAL
 #SBATCH --partition=boost_usr_prod
@@ -29,7 +30,7 @@ FRAMES=16
 OUT="${FAST}/outputs/bulk_n${N}_seed${SEED}"
 DS="${JEPAS_DATASETS_ROOT}"
 
-IMAGE_MODELS_ALL=(ijepa radjepa vjepa2-vitl vjepa2-1-vitb echojepa)
+IMAGE_MODELS=(ijepa radjepa)
 VIDEO_MODELS=(vjepa2-vitl vjepa2-1-vitb echojepa)
 
 declare -A INPUTS
@@ -54,11 +55,12 @@ run() {  # dataset kind model...
       --embeddings "${OUT}/${dataset}/${model}/embeddings.h5"
     python experiments/token_metrics_null.py --model "${model}" --seed "${SEED}" \
       --workers "${SLURM_CPUS_PER_TASK}" \
-      --embeddings "${OUT}/${dataset}/${model}/embeddings.h5"
+      --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" \
+      --out-dir "${OUT}/${dataset}/${model}/null_baselines"
   done
 }
 
-for d in imagenet rsna; do run "$d" image "${IMAGE_MODELS_ALL[@]}"; done
+for d in imagenet rsna; do run "$d" image "${IMAGE_MODELS[@]}"; done
 for d in diving48 echonet kinetics epic-kitchens; do run "$d" video "${VIDEO_MODELS[@]}"; done
 
 python experiments/token_metrics_aggregate.py "${OUT}" --out-dir "${OUT}/aggregate" \
