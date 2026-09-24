@@ -47,6 +47,8 @@ _DATASET_FRAGMENTS = (
     ("imagenet", "imagenet"),
     ("rsna-pneumonia", "rsna"),
     ("diving48", "diving48"),
+    ("kinetics", "kinetics"),
+    ("epic-kitchens", "epic-kitchens"),
     ("stanforddataset", "echonet"),
     ("echonet", "echonet"),
 )

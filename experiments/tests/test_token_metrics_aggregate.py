@@ -53,6 +53,8 @@ class InferDatasetModalityTest(unittest.TestCase):
             "/shared/datasets/classification/imagenet/val/n01/x.JPEG": "imagenet",
             "/shared/datasets/medical/rsna-pneumonia-detection-challenge/stage_2_test_images_png/a.png": "rsna",
             "/shared/datasets/video/diving48/rgb/clip.mp4": "diving48",
+            "/leonardo/prod/data/ai/kinetics/kinetics400/256/val/abseiling/x.mp4": "kinetics",
+            "/leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100/P01/videos/P01_01.MP4": "epic-kitchens",
             "/shared/eidos-datasets/data-registry/medical/cardio/catdx/StanfordDataset/Videos/x.avi": "echonet",
         }
         for source, expected in cases.items():
