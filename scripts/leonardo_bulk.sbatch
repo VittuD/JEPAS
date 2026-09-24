@@ -2,7 +2,9 @@
 # Bulk token extraction + token metrics over every dataset and model.
 #
 # Smoke test:  sbatch --export=ALL,N=10 scripts/leonardo_bulk.sbatch
-# Full run:    sbatch --export=ALL,N=1024 --qos=normal --time=12:00:00 scripts/leonardo_bulk.sbatch
+# Full run:    sbatch --export=ALL,N=1024 --qos=normal --time=05:00:00 scripts/leonardo_bulk.sbatch
+#   Time bound from the n=10 smoke run (16 jobs, 383 s total incl. fixed model-load costs):
+#   treating all of it as per-sample cost gives 383/10*1024/4 GPUs ~ 2.7 h; realistic ~1.5-2 h.
 #
 # One node, all 4 GPUs: the 16 (dataset, model) jobs are pulled from a shared queue by
 # 4 workers, one per GPU (CUDA_VISIBLE_DEVICES), each using CPUS/4 metric workers.
