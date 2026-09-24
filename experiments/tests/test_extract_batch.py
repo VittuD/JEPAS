@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from experiments.catalog import model_specs
-from experiments.extract_batch import batch_command, resolve_kind
+from experiments.extract_batch import batch_command, resolve_kind, select_inputs
 
 
 class ResolveKindTest(unittest.TestCase):
@@ -125,3 +125,31 @@ class CliDryRunTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelectInputsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.candidates = [Path(f"/x/{i:03d}.mp4") for i in range(50)]
+
+    def test_all_valid_matches_plain_seeded_choice(self) -> None:
+        import numpy as np
+
+        expected = [self.candidates[i] for i in np.sort(np.random.default_rng(7).choice(50, size=10, replace=False))]
+        selected, skipped = select_inputs(self.candidates, 10, 7, lambda p: True)
+        self.assertEqual(selected, expected)
+        self.assertEqual(skipped, [])
+
+    def test_corrupt_inputs_are_replaced_and_reported(self) -> None:
+        base, _ = select_inputs(self.candidates, 10, 7, lambda p: True)
+        bad = set(base[:3])
+        selected, skipped = select_inputs(self.candidates, 10, 7, lambda p: p not in bad)
+        self.assertEqual(len(selected), 10)
+        self.assertEqual(set(skipped), bad)
+        self.assertTrue(bad.isdisjoint(selected))
+        self.assertEqual(selected, sorted(selected))
+        again, _ = select_inputs(self.candidates, 10, 7, lambda p: p not in bad)
+        self.assertEqual(again, selected)
+
+    def test_too_few_readable_inputs_fail(self) -> None:
+        with self.assertRaises(ValueError):
+            select_inputs(self.candidates, 10, 7, lambda p: int(p.stem) < 5)

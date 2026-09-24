@@ -15,8 +15,11 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
@@ -105,6 +108,68 @@ def batch_command(
     return command
 
 
+def input_is_readable(path: Path, kind: str) -> bool:
+    """Cheap decode probe so corrupt inputs are skipped instead of crashing a batch."""
+    try:
+        if kind == "video":
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+                capture_output=True, text=True, timeout=120,
+            )
+            if probe.returncode != 0 or float(probe.stdout.strip() or "0") <= 0:
+                return False
+            decode = subprocess.run(
+                ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"],
+                capture_output=True, timeout=120,
+            )
+            return decode.returncode == 0
+        if kind == "image":
+            from PIL import Image
+
+            with Image.open(path) as image:
+                image.load()
+            return True
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+    return True
+
+
+def select_inputs(
+    candidates: list[Path],
+    n: int,
+    seed: int,
+    is_valid: Callable[[Path], bool],
+    workers: int = 8,
+) -> tuple[list[Path], list[Path]]:
+    """Seeded sample of `n` readable inputs, plus the unreadable ones that were skipped.
+
+    The initial draw is identical to a plain seeded `rng.choice`, so with no corrupt
+    inputs the selection is unchanged. Each unreadable pick is replaced by the next
+    readable input from a seeded shuffle of the remaining pool. Validity does not depend
+    on the model, so every model gets the same inputs.
+    """
+    rng = np.random.default_rng(seed)
+    picked = np.sort(rng.choice(len(candidates), size=n, replace=False))
+    with ThreadPoolExecutor(workers) as pool:
+        ok = list(pool.map(lambda i: is_valid(candidates[i]), picked))
+    selected = [int(i) for i, good in zip(picked, ok) if good]
+    skipped = [candidates[int(i)] for i, good in zip(picked, ok) if not good]
+    if skipped:
+        chosen = set(int(i) for i in picked)
+        rest = [i for i in rng.permutation(len(candidates)) if int(i) not in chosen]
+        pos = 0
+        while len(selected) < n and pos < len(rest):
+            batch = rest[pos : pos + (n - len(selected))]
+            pos += len(batch)
+            with ThreadPoolExecutor(workers) as pool:
+                ok = list(pool.map(lambda i: is_valid(candidates[int(i)]), batch))
+            selected += [int(i) for i, good in zip(batch, ok) if good]
+            skipped += [candidates[int(i)] for i, good in zip(batch, ok) if not good]
+        if len(selected) < n:
+            raise ValueError(f"Only {len(selected)} readable inputs found; need {n}.")
+    return [candidates[i] for i in sorted(selected)], skipped
+
+
 def parse_args() -> argparse.Namespace:
     choices = tuple(sorted((*model_specs(), *MODEL_ALIASES)))
     parser = argparse.ArgumentParser(description=__doc__)
@@ -141,9 +206,16 @@ def main() -> None:
             f"Only {len(candidates)} {kind} inputs found under {args.input}; "
             f"need {args.n}. Lower --n, add more --input paths, or pass --recursive."
         )
-    rng = np.random.default_rng(args.seed)
-    sample_idx = np.sort(rng.choice(len(candidates), size=args.n, replace=False))
-    sampled = [candidates[i] for i in sample_idx]
+    if args.dry_run:
+        rng = np.random.default_rng(args.seed)
+        sampled = [candidates[i] for i in np.sort(rng.choice(len(candidates), size=args.n, replace=False))]
+        skipped: list[Path] = []
+    else:
+        sampled, skipped = select_inputs(
+            candidates, args.n, args.seed, lambda p: input_is_readable(p, kind)
+        )
+        for path in skipped:
+            print(f"[skipped unreadable] {path}")
 
     weights = (args.weights or spec.weights_path).expanduser().resolve()
     checkpoint = checkpoint_for(spec, weights)
@@ -185,6 +257,7 @@ def main() -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     input_list_path.write_text("\n".join(str(p) for p in sampled) + "\n")
+    (output_dir / "skipped_inputs.txt").write_text("".join(f"{p}\n" for p in skipped))
 
     command = batch_command(
         spec,
@@ -248,6 +321,7 @@ def main() -> None:
         "model_code": model_code_provenance(model_code),
         "embeddings": portable_path(embeddings_path),
         "input_list": portable_path(input_list_path),
+        "skipped_unreadable_inputs": len(skipped),
     }
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

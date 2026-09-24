@@ -69,21 +69,30 @@ def main() -> None:
     if len(slots) < args.n:
         raise ValueError(f"Only {len(slots)} windows available; need {args.n}.")
 
-    rng = np.random.default_rng(args.seed)
-    chosen = sorted(int(k) for k in rng.choice(len(slots), size=args.n, replace=False))
+    # Seeded order over all windows; failed cuts are replaced by the next windows in it.
+    order = np.random.default_rng(args.seed).permutation(len(slots))
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    jobs = []
-    for k in chosen:
-        i, s = slots[k]
-        src = usable[i][0]
-        jobs.append((src, s * args.clip_seconds, args.clip_seconds, args.out_dir / f"{src.stem}_s{s:04d}.mp4"))
-    with ThreadPoolExecutor(args.workers) as pool:
-        ok = list(pool.map(lambda j: cut(*j), jobs))
-    failed = ok.count(False)
-    print(f"wrote {ok.count(True)}/{len(jobs)} clips to {args.out_dir}")
-    if failed:
-        raise SystemExit(f"{failed} clips failed")
 
+    def job(k: int) -> tuple[Path, float, float, Path]:
+        i, s = slots[int(k)]
+        src = usable[i][0]
+        return src, s * args.clip_seconds, args.clip_seconds, args.out_dir / f"{src.stem}_s{s:04d}.mp4"
+
+    done, pos, failed = [], 0, 0
+    while len(done) < args.n and pos < len(order):
+        batch = [job(k) for k in order[pos : pos + (args.n - len(done))]]
+        pos += len(batch)
+        with ThreadPoolExecutor(args.workers) as pool:
+            ok = list(pool.map(lambda j: cut(*j), batch))
+        for j, good in zip(batch, ok):
+            if good:
+                done.append(j[3])
+            else:
+                failed += 1
+                print(f"[skipped failed cut] {j[0]} @ {j[1]:.0f}s")
+    print(f"wrote {len(done)}/{args.n} clips to {args.out_dir} ({failed} failed cuts replaced)")
+    if len(done) < args.n:
+        raise SystemExit("not enough cuttable windows")
 
 if __name__ == "__main__":
     main()
