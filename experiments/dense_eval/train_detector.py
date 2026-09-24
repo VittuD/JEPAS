@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -31,8 +32,10 @@ from experiments.dense_eval.coco_dataset import CocoDetectionDataset, collate_fn
 from experiments.dense_eval.simple_fpn import SimpleFeaturePyramid  # noqa: E402
 
 
-COCO_ROOT = Path("/shared/datasets/detection/coco")
-CITYSCAPES_ROOT = Path("/shared/datasets/detection/cityscapes")
+# Override on clusters where datasets are not under /shared/datasets.
+DATASETS_ROOT = Path(os.environ.get("JEPAS_DATASETS_ROOT", "/shared/datasets"))
+COCO_ROOT = DATASETS_ROOT / "detection" / "coco"
+CITYSCAPES_ROOT = DATASETS_ROOT / "detection" / "cityscapes"
 
 MODEL_CHECKPOINTS = {
     "ijepa": ROOT_DIR / "weights" / "ijepa" / "IN1K-vit.h.14-300e.pth.tar",
