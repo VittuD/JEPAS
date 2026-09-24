@@ -140,10 +140,10 @@ heartbeat &
 HB=$!
 for g in $(seq 0 $((NGPU - 1))); do worker "${g}" & done
 wait $(jobs -p | grep -vx "${HB}")
-kill "${HB}" 2>/dev/null || true
+kill "${HB}" 2>/dev/null; wait "${HB}" 2>/dev/null || true
 
 python experiments/token_metrics_aggregate.py "${OUT}" --out-dir "${OUT}/aggregate" \
-  --null "${OUT}" || echo "aggregate failed"
+  --null "${OUT}/null_baselines" || echo "aggregate failed"
 
 if [[ -s "${LOGS}/failed.txt" ]]; then
   echo "Failed jobs:"; cat "${LOGS}/failed.txt"; exit 1
