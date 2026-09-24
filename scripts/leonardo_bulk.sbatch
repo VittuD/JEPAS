@@ -30,6 +30,7 @@ source scripts/leonardo_env.sh
 N="${N:-10}"
 SEED="${SEED:-42}"
 FRAMES=16
+CLUSTER_K="2 3 4"   # must be identical for real metrics and the null baseline
 OUT="${FAST}/outputs/bulk_n${N}_seed${SEED}"
 DS="${JEPAS_DATASETS_ROOT}"
 
@@ -85,7 +86,7 @@ run_one() {  # dataset kind model  (GPU is fixed by CUDA_VISIBLE_DEVICES)
     --frames "${FRAMES}" --output-dir "${OUT}/${dataset}" || return 1
   stage token_metrics
   python experiments/token_metrics.py --model "${model}" --seed "${SEED}" \
-    --workers "${CPUS_PER_JOB}" \
+    --workers "${CPUS_PER_JOB}" --cluster-k ${CLUSTER_K} \
     --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" || return 1
   # The null baseline depends only on the model's token geometry (T, D, grid) and the
   # seed, not on the data, and the aggregate joins it on (model, method, params). So
@@ -93,7 +94,7 @@ run_one() {  # dataset kind model  (GPU is fixed by CUDA_VISIBLE_DEVICES)
   if [[ ! -s "${OUT}/null_baselines/${model}/null_summary.csv" ]] && mkdir "${LOGS}/null_${model}.lock" 2>/dev/null; then
     stage null_baselines
     python experiments/token_metrics_null.py --model "${model}" --seed "${SEED}" \
-      --workers "${CPUS_PER_JOB}" \
+      --workers "${CPUS_PER_JOB}" --cluster-k ${CLUSTER_K} \
       --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" \
       --out-dir "${OUT}/null_baselines/${model}" || { rmdir "${LOGS}/null_${model}.lock"; return 1; }
   fi

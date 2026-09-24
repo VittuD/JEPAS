@@ -23,6 +23,13 @@ are present, so a video sample's temporal axis is a real neighbor axis too
 
 from __future__ import annotations
 
+import os
+
+# The metrics run in a process pool (--workers). Without this, every worker starts its own
+# BLAS/OpenMP thread pool and they oversubscribe the cores (measured ~50x slower).
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
+
 import argparse
 import csv
 import json
