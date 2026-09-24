@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --time=00:10:00
-#SBATCH --output=/leonardo_scratch/fast/IscrC_PRIMAL/dvitturi/JEPAS/logs/smoke_%j.out
+#SBATCH --output=/leonardo_work/IscrC_PRIMAL/dvitturi/JEPAS/logs/smoke_%j.out
 
 set -euo pipefail
 cd /leonardo_work/IscrC_PRIMAL/dvitturi/JEPAS
