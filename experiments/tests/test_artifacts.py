@@ -13,9 +13,32 @@ from PIL import Image
 from experiments.artifacts import (
     SCHEMA_NAME,
     cleanup_embeddings,
+    read_embedding_metadata,
+    valid_embeddings,
     valid_visualization,
     write_embeddings,
 )
+
+
+class SourcesTest(unittest.TestCase):
+    def test_sources_round_trip(self) -> None:
+        tokens = np.arange(24, dtype=np.float32).reshape(3, 2, 4)
+        sources = ["a.jpg", "b.jpg", "c.jpg"]
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "embeddings.h5"
+            write_embeddings(path, tokens, metadata={"model": "test"}, sources=sources)
+            self.assertTrue(valid_embeddings(path))
+            metadata = read_embedding_metadata(path)
+            self.assertEqual(metadata["sources"], sources)
+
+    def test_sources_length_mismatch_rejected(self) -> None:
+        tokens = np.arange(24, dtype=np.float32).reshape(3, 2, 4)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "embeddings.h5"
+            with self.assertRaisesRegex(ValueError, "sources has"):
+                write_embeddings(
+                    path, tokens, metadata={"model": "test"}, sources=["only-one.jpg"]
+                )
 
 
 class CleanupTest(unittest.TestCase):

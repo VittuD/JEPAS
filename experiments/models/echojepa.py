@@ -7,6 +7,7 @@ import argparse
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--image", type=Path, default=None, help="Optional image path.")
     parser.add_argument("--video", type=Path, default=None, help="Optional video path sampled with ffmpeg.")
+    parser.add_argument(
+        "--input-list",
+        type=Path,
+        default=None,
+        help=(
+            "Text file of newline-separated image or video paths for batched "
+            "extraction. Mutually exclusive with --image/--video. Requires "
+            "--list-kind. Loads the model once and runs sub-batches of "
+            "--batch-size, writing one (N, T, D) token array."
+        ),
+    )
+    parser.add_argument(
+        "--list-kind",
+        choices=("image", "video"),
+        default=None,
+        help="Kind of every path in --input-list.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=8,
+        help="Sub-batch size for --input-list forward passes (video tokens are large).",
+    )
+    parser.add_argument(
+        "--load-workers",
+        type=int,
+        default=24,
+        help=(
+            "Thread pool size for loading each sub-batch (PIL decode / ffmpeg "
+            "frame extraction), which is otherwise sequential CPU/IO work "
+            "the GPU sits idle for. ffmpeg itself is capped to 2 threads per "
+            "call, so load-workers * 2 is the real concurrency ceiling -- "
+            "default targets roughly half the container's cores, not all of "
+            "them, out of courtesy to other hssh users on shared CPU."
+        ),
+    )
     parser.add_argument("--output-embedding", type=Path, default=None, help="Optional .npy token output.")
     parser.add_argument(
         "--output-preprocessed-image",
@@ -110,6 +147,8 @@ def load_video(path: Path, image_size: int, frames: int) -> tuple[torch.Tensor, 
             "-hide_banner",
             "-loglevel",
             "error",
+            "-threads",
+            "2",
             "-i",
             str(path),
             "-map",
@@ -162,23 +201,56 @@ def main() -> None:
     del checkpoint, state_dict
     model = model.to(runtime.device).eval()
 
-    if args.image is not None and args.video is not None:
-        raise ValueError("Pass only one of --image or --video.")
-    if args.video is not None:
-        video, preprocessed_image = load_video(args.video, args.image_size, args.frames)
-    elif args.image is not None:
-        image_tensor, preprocessed_image = load_image(args.image, args.image_size)
-        image = image_tensor.unsqueeze(0)
-        video = image.unsqueeze(2).repeat(1, 1, args.frames, 1, 1)
-    else:
-        image = torch.randn(1, 3, args.image_size, args.image_size)
-        video = image.unsqueeze(2).repeat(1, 1, args.frames, 1, 1)
-        preprocessed_image = None
+    if args.input_list is not None:
+        if args.image is not None or args.video is not None:
+            raise ValueError("Pass only one of --image/--video or --input-list.")
+        if args.list_kind is None:
+            raise ValueError("--input-list requires --list-kind image|video.")
+        paths = [
+            Path(line) for line in args.input_list.read_text().splitlines() if line.strip()
+        ]
+        if not paths:
+            raise ValueError(f"No paths found in {args.input_list}")
 
-    video = video.to(runtime.device, non_blocking=runtime.device.type == "cuda")
-    with inference_context(runtime):
-        embedding = model(video)
-    pooled = embedding.mean(dim=1)
+        def load_one(p: Path) -> torch.Tensor:
+            if args.list_kind == "video":
+                return load_video(p, args.image_size, args.frames)[0]
+            image_tensor = load_image(p, args.image_size)[0].unsqueeze(0)
+            return image_tensor.unsqueeze(2).repeat(1, 1, args.frames, 1, 1)
+
+        chunks = []
+        num_batches = -(-len(paths) // args.batch_size)
+        with ThreadPoolExecutor(max_workers=args.load_workers) as load_pool:
+            for start in range(0, len(paths), args.batch_size):
+                chunk_paths = paths[start : start + args.batch_size]
+                batch = torch.cat(list(load_pool.map(load_one, chunk_paths)), dim=0).to(
+                    runtime.device, non_blocking=runtime.device.type == "cuda"
+                )
+                with inference_context(runtime):
+                    batch_embedding = model(batch)
+                chunks.append(batch_embedding.detach().half().cpu())
+                print(f"batch {start // args.batch_size + 1}/{num_batches}: {len(chunk_paths)} {args.list_kind}s")
+        embedding = torch.cat(chunks, dim=0)
+        pooled = embedding.float().mean(dim=1)
+        preprocessed_image = None
+    else:
+        if args.image is not None and args.video is not None:
+            raise ValueError("Pass only one of --image or --video.")
+        if args.video is not None:
+            video, preprocessed_image = load_video(args.video, args.image_size, args.frames)
+        elif args.image is not None:
+            image_tensor, preprocessed_image = load_image(args.image, args.image_size)
+            image = image_tensor.unsqueeze(0)
+            video = image.unsqueeze(2).repeat(1, 1, args.frames, 1, 1)
+        else:
+            image = torch.randn(1, 3, args.image_size, args.image_size)
+            video = image.unsqueeze(2).repeat(1, 1, args.frames, 1, 1)
+            preprocessed_image = None
+
+        video = video.to(runtime.device, non_blocking=runtime.device.type == "cuda")
+        with inference_context(runtime):
+            embedding = model(video)
+        pooled = embedding.mean(dim=1)
 
     if args.output_embedding is not None:
         import numpy as np
@@ -190,8 +262,11 @@ def main() -> None:
         preprocessed_image.save(args.output_preprocessed_image)
 
     print(f"checkpoint={args.checkpoint}")
-    print(f"image={args.image or ('none' if args.video is not None else 'random')}")
-    print(f"video={args.video or 'repeated-image'}")
+    if args.input_list is not None:
+        print(f"input_list={args.input_list} ({args.list_kind})")
+    else:
+        print(f"image={args.image or ('none' if args.video is not None else 'random')}")
+        print(f"video={args.video or 'repeated-image'}")
     print(f"device={runtime.device.type}")
     print(f"precision={runtime.precision}")
     print(

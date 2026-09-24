@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import torch
@@ -35,6 +36,33 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional image path. If omitted, use a seeded random image.",
+    )
+    parser.add_argument(
+        "--input-list",
+        type=Path,
+        default=None,
+        help=(
+            "Text file of newline-separated image paths for batched extraction. "
+            "Mutually exclusive with --image. Loads the model once and runs "
+            "sub-batches of --batch-size, writing one (N, T, D) token array."
+        ),
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Sub-batch size for --input-list forward passes.",
+    )
+    parser.add_argument(
+        "--load-workers",
+        type=int,
+        default=24,
+        help=(
+            "Thread pool size for decoding each sub-batch's images, which is "
+            "otherwise sequential CPU work the GPU sits idle for. Default "
+            "targets a fraction of the container's cores, not all of them, "
+            "out of courtesy to other hssh users on shared CPU."
+        ),
     )
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument(
@@ -109,15 +137,40 @@ def main() -> None:
     del checkpoint, state_dict
     model = model.to(runtime.device).eval()
 
-    if args.image is None:
-        image = torch.randn(1, 3, args.image_size, args.image_size)
+    if args.input_list is not None:
+        if args.image is not None:
+            raise ValueError("Pass only one of --image or --input-list.")
+        paths = [
+            Path(line) for line in args.input_list.read_text().splitlines() if line.strip()
+        ]
+        if not paths:
+            raise ValueError(f"No paths found in {args.input_list}")
+        chunks = []
+        num_batches = -(-len(paths) // args.batch_size)
+        with ThreadPoolExecutor(max_workers=args.load_workers) as load_pool:
+            for start in range(0, len(paths), args.batch_size):
+                chunk_paths = paths[start : start + args.batch_size]
+                loaded = load_pool.map(lambda p: load_image(p, args.image_size)[0], chunk_paths)
+                batch = torch.cat(list(loaded), dim=0).to(
+                    runtime.device, non_blocking=runtime.device.type == "cuda"
+                )
+                with inference_context(runtime):
+                    batch_embedding = model(batch)
+                chunks.append(batch_embedding.detach().half().cpu())
+                print(f"batch {start // args.batch_size + 1}/{num_batches}: {len(chunk_paths)} images")
+        embedding = torch.cat(chunks, dim=0)
+        pooled = embedding.float().mean(dim=1)
         preprocessed_image = None
     else:
-        image, preprocessed_image = load_image(args.image, args.image_size)
-    image = image.to(runtime.device, non_blocking=runtime.device.type == "cuda")
-    with inference_context(runtime):
-        embedding = model(image)
-    pooled = embedding.mean(dim=1)
+        if args.image is None:
+            image = torch.randn(1, 3, args.image_size, args.image_size)
+            preprocessed_image = None
+        else:
+            image, preprocessed_image = load_image(args.image, args.image_size)
+        image = image.to(runtime.device, non_blocking=runtime.device.type == "cuda")
+        with inference_context(runtime):
+            embedding = model(image)
+        pooled = embedding.mean(dim=1)
 
     if args.output_embedding is not None:
         import numpy as np
@@ -129,7 +182,7 @@ def main() -> None:
         preprocessed_image.save(args.output_preprocessed_image)
 
     print(f"checkpoint={args.checkpoint}")
-    print(f"image={args.image or 'random'}")
+    print(f"image={args.image or ('input-list' if args.input_list is not None else 'random')}")
     print(f"device={runtime.device.type}")
     print(f"precision={runtime.precision}")
     print(f"positional_embedding={pos_resize}")

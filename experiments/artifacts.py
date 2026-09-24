@@ -40,14 +40,25 @@ def write_embeddings(
     tokens: np.ndarray,
     *,
     metadata: dict[str, Any],
+    sources: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Atomically store tokens losslessly and an FP32 mean-pooled view."""
+    """Atomically store tokens losslessly and an FP32 mean-pooled view.
+
+    `sources` is optional per-row provenance (e.g. the input file each row of
+    a batched `(N, T, D)` array came from). Its length must equal `tokens`'
+    leading dimension. Single-example callers (`N` implicitly 1) can omit it.
+    """
     path = path.resolve()
     array = np.asarray(tokens)
     if array.ndim < 2:
         raise ValueError(f"Expected token embeddings, got {array.shape}.")
     if not np.issubdtype(array.dtype, np.number):
         raise TypeError(f"Expected a numeric token dtype, got {array.dtype}.")
+    if sources is not None and len(sources) != array.shape[0]:
+        raise ValueError(
+            f"sources has {len(sources)} entries but tokens has "
+            f"{array.shape[0]} rows."
+        )
     pooled = array.mean(axis=-2, dtype=np.float32)
     temporary = path.with_name(f".{path.name}.tmp")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,6 +88,12 @@ def write_embeddings(
                 compression_opts=4,
                 shuffle=True,
             )
+            if sources is not None:
+                handle.create_dataset(
+                    "sources",
+                    data=np.asarray(sources, dtype=object),
+                    dtype=h5py.string_dtype(encoding="utf-8"),
+                )
             handle.flush()
         os.replace(temporary, path)
     finally:
@@ -100,6 +117,11 @@ def read_embedding_metadata(path: Path) -> dict[str, Any]:
                 "pooled_dtype": handle["pooled"].dtype.str,
             }
         )
+        if "sources" in handle:
+            metadata["sources"] = [
+                value.decode("utf-8") if isinstance(value, bytes) else value
+                for value in handle["sources"][...]
+            ]
         return metadata
 
 
@@ -115,6 +137,8 @@ def valid_embeddings(path: Path) -> bool:
             if tokens.ndim < 2 or pooled.dtype != np.dtype(np.float32):
                 return False
             if pooled.shape != tokens.shape[:-2] + tokens.shape[-1:]:
+                return False
+            if "sources" in handle and handle["sources"].shape[0] != tokens.shape[0]:
                 return False
             json.loads(str(handle.attrs["metadata_json"]))
             return True

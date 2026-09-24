@@ -21,6 +21,11 @@ bash -n scripts/*.sh weights/*.sh
   experiments.tests.test_artifacts \
   experiments.tests.test_browser \
   experiments.tests.test_extract \
+  experiments.tests.test_extract_batch \
+  experiments.tests.test_token_metrics \
+  experiments.tests.test_token_metrics_aggregate \
+  experiments.tests.test_token_metrics_null \
+  experiments.tests.test_dense_eval_coco_dataset \
   experiments.tests.test_provenance \
   experiments.tests.test_ijepa_lite
 
