@@ -87,11 +87,16 @@ run_one() {  # dataset kind model  (GPU is fixed by CUDA_VISIBLE_DEVICES)
   python experiments/token_metrics.py --model "${model}" --seed "${SEED}" \
     --workers "${CPUS_PER_JOB}" \
     --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" || return 1
-  stage null_baselines
-  python experiments/token_metrics_null.py --model "${model}" --seed "${SEED}" \
-    --workers "${CPUS_PER_JOB}" \
-    --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" \
-    --out-dir "${OUT}/${dataset}/${model}/null_baselines" || return 1
+  # The null baseline depends only on the model's token geometry (T, D, grid) and the
+  # seed, not on the data, and the aggregate joins it on (model, method, params). So
+  # compute it once per model: the first job of a model to get here takes the lock.
+  if [[ ! -s "${OUT}/null_baselines/${model}/null_summary.csv" ]] && mkdir "${LOGS}/null_${model}.lock" 2>/dev/null; then
+    stage null_baselines
+    python experiments/token_metrics_null.py --model "${model}" --seed "${SEED}" \
+      --workers "${CPUS_PER_JOB}" \
+      --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" \
+      --out-dir "${OUT}/null_baselines/${model}" || { rmdir "${LOGS}/null_${model}.lock"; return 1; }
+  fi
 }
 
 job_finished() { flock "${DONE_COUNT}" bash -c 'i=$(cat "$0"); i=$((i + 1)); echo "$i" > "$0"; echo "$i"' "${DONE_COUNT}"; }
@@ -129,7 +134,7 @@ heartbeat() {
   done
 }
 
-rm -f "${LOGS}/failed.txt" "${LOGS}"/gpu*.current
+rm -rf "${LOGS}/failed.txt" "${LOGS}"/gpu*.current "${LOGS}"/null_*.lock
 heartbeat &
 HB=$!
 for g in $(seq 0 $((NGPU - 1))); do worker "${g}" & done
