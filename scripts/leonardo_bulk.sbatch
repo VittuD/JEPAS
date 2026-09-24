@@ -61,6 +61,12 @@ COUNTER="${LOGS}/queue.counter"
 for d in imagenet rsna; do for m in "${IMAGE_MODELS[@]}"; do echo "$d image $m" >> "${QUEUE}"; done; done
 for d in diving48 echonet kinetics epic-kitchens; do for m in "${VIDEO_MODELS[@]}"; do echo "$d video $m" >> "${QUEUE}"; done; done
 echo 0 > "${COUNTER}"
+DONE_COUNT="${LOGS}/done.count"
+echo 0 > "${DONE_COUNT}"
+TOTAL_JOBS=$(wc -l < "${QUEUE}")
+export PYTHONUNBUFFERED=1   # job logs update live instead of at block boundaries
+
+ts() { date +%H:%M:%S; }
 
 next_job() {
   flock "${COUNTER}" bash -c '
@@ -69,37 +75,66 @@ next_job() {
 
 run_one() {  # dataset kind model  (GPU is fixed by CUDA_VISIBLE_DEVICES)
   local dataset="$1" kind="$2" model="$3"
-  echo "=== ${dataset} / ${model} (${kind}, n=${N}, seed=${SEED}, gpu=${CUDA_VISIBLE_DEVICES})"
+  local gpu="${CUDA_VISIBLE_DEVICES}"
+  echo "=== ${dataset} / ${model} (${kind}, n=${N}, seed=${SEED}, gpu=${gpu})"
+  stage() { echo "${dataset}/${model} $1" > "${LOGS}/gpu${gpu}.current"; echo "$(ts) [gpu${gpu}] ${dataset}/${model}: $1" >&3; }
+  stage extract
   # shellcheck disable=SC2086
   python experiments/extract_batch.py --model "${model}" --kind "${kind}" \
     --input ${INPUTS[$dataset]} --recursive --n "${N}" --seed "${SEED}" \
     --frames "${FRAMES}" --output-dir "${OUT}/${dataset}" || return 1
+  stage token_metrics
   python experiments/token_metrics.py --model "${model}" --seed "${SEED}" \
     --workers "${CPUS_PER_JOB}" \
     --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" || return 1
+  stage null_baselines
   python experiments/token_metrics_null.py --model "${model}" --seed "${SEED}" \
     --workers "${CPUS_PER_JOB}" \
     --embeddings "${OUT}/${dataset}/${model}/embeddings.h5" \
     --out-dir "${OUT}/${dataset}/${model}/null_baselines" || return 1
 }
 
+job_finished() { flock "${DONE_COUNT}" bash -c 'i=$(cat "$0"); i=$((i + 1)); echo "$i" > "$0"; echo "$i"' "${DONE_COUNT}"; }
+
 worker() {  # gpu_id
-  local gpu="$1" line
+  local gpu="$1" line start n
   export CUDA_VISIBLE_DEVICES="${gpu}"
+  exec 3>&1   # main log; run_one's own stdout/stderr go to the per-job log
   while line="$(next_job)"; [[ -n "${line}" ]]; do
     read -r dataset kind model <<< "${line}"
+    start=${SECONDS}
+    echo "$(ts) [gpu${gpu}] START  ${dataset}/${model}"
     if run_one "${dataset}" "${kind}" "${model}" > "${LOGS}/${dataset}__${model}.log" 2>&1; then
-      echo "[gpu${gpu}] ok     ${dataset}/${model}"
+      n=$(job_finished)
+      echo "$(ts) [gpu${gpu}] ok     ${dataset}/${model} in $((SECONDS - start))s  [${n}/${TOTAL_JOBS} finished]"
     else
-      echo "[gpu${gpu}] FAILED ${dataset}/${model} (see ${LOGS}/${dataset}__${model}.log)"
+      n=$(job_finished)
+      echo "$(ts) [gpu${gpu}] FAILED ${dataset}/${model} after $((SECONDS - start))s  [${n}/${TOTAL_JOBS} finished] (see ${LOGS}/${dataset}__${model}.log)"
       echo "${dataset}/${model}" >> "${LOGS}/failed.txt"
     fi
+    rm -f "${LOGS}/gpu${gpu}.current"
   done
 }
 
-rm -f "${LOGS}/failed.txt"
+# Every HEARTBEAT seconds, show what each GPU is doing and the last line of its job log.
+heartbeat() {
+  local g cur name log
+  while sleep "${HEARTBEAT:-60}"; do
+    for g in $(seq 0 $((NGPU - 1))); do
+      [[ -f "${LOGS}/gpu${g}.current" ]] || continue
+      cur="$(cat "${LOGS}/gpu${g}.current" 2>/dev/null)" || continue
+      name="${cur%% *}"; log="${LOGS}/${name/\//__}.log"
+      echo "$(ts) [gpu${g}] running ${cur} | $(tail -c 400 "${log}" 2>/dev/null | tr '\r' '\n' | grep -v '^$' | tail -n 1 | cut -c1-140)"
+    done
+  done
+}
+
+rm -f "${LOGS}/failed.txt" "${LOGS}"/gpu*.current
+heartbeat &
+HB=$!
 for g in $(seq 0 $((NGPU - 1))); do worker "${g}" & done
-wait
+wait $(jobs -p | grep -vx "${HB}")
+kill "${HB}" 2>/dev/null || true
 
 python experiments/token_metrics_aggregate.py "${OUT}" --out-dir "${OUT}/aggregate" \
   --null "${OUT}" || echo "aggregate failed"
