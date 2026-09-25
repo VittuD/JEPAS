@@ -96,3 +96,21 @@ Boundary-fraction ratio, mean over 3 seeds (sd in brackets), k-means k=3:
 ### COCO (val2017) added
 
 COCO val2017 was added as a third image dataset (`DATASETS=coco` into each existing `bulk_n1024_seed{0,1,42}`; ijepa and radjepa only, ~1 min per job, no failures, no skipped inputs). It reproduces ImageNet within about one sd (boundary-fraction ratio ijepa 0.507 vs 0.515, radjepa 0.416 vs 0.412; components ratio 0.301 vs 0.317 and 0.203 vs 0.202), and radjepa < ijepa in every seed. So the image-model result does not depend on the dataset, but COCO adds little new information on this metric. The seed summary now covers 108 configurations.
+
+## Resolution control (grid density)
+
+Question: is vjepa2-1-vitb's smoothness (24x24 grid at its native 384) just a finer token grid? Control, seed 42, n=1024, same samples, four video datasets, each run with its own null baseline: vjepa2-1-vitb at 256 (grid 8x16x16) and vjepa2-vitl at 384 (grid 8x24x24). Jobs 58617827 / 58617829, 16/16 OK, 0 skipped inputs. Compared with `experiments/token_metrics_variants.py` (`$FAST/outputs/resolution_control/variants.md`).
+
+Boundary-fraction ratio (k-means k=3; lower = smoother; single seed, seed sd is ~0.01-0.02):
+
+| dataset | vitb@384 (main) | vitb@256 | vitl@256 (main) | vitl@384 |
+|---|---|---|---|---|
+| diving48 | 0.314 | 0.339 | 0.611 | 0.573 |
+| echonet | 0.249 | 0.298 | 0.836 | 0.718 |
+| epic-kitchens | 0.385 | 0.413 | 0.762 | 0.766 |
+| kinetics | 0.315 | 0.355 | 0.729 | 0.726 |
+
+- **The lead is not a grid-density artefact.** At the matched 16x16 grid vitb is 0.30-0.41 vs vitl 0.61-0.84; at the matched 24x24 grid it is 0.25-0.39 vs 0.57-0.77. The gap between the two models is 0.2-0.5, an order of magnitude larger than the resolution effect on either.
+- **Resolution does matter a little for vitb:** going 384 -> 256 raises its boundary-fraction ratio by 0.03-0.05 (components ratio 0.077 -> 0.088 on diving48, similar elsewhere; adjacent cosine similarity 0.796 -> 0.788). Its ordering versus the other models is unchanged.
+- **vitl at 384 is slightly smoother on Diving48 (0.611 -> 0.573) and clearly on EchoNet (0.836 -> 0.718; components 0.85 -> 0.565)**, and unchanged on EPIC and Kinetics. So the EchoNet outlier for vitl (near-noise at 256) is partly a resolution effect, consistent with EchoNet's small native frames being upscaled. This is the only place the control changes a conclusion: report vitl on EchoNet with that caveat.
+- Not controlled: patch size (both 16), training data and objective. Only the token grid was varied. One seed only.
