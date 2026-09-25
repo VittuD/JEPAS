@@ -1,7 +1,23 @@
 # Synthetic probe set
 
-Status: design (v1). Written before implementation so the questions and the ways they
-can fail are fixed before we see results.
+Status: v1 implemented (`experiments/synthetic_probe.py`, `scripts/make_synthetic_probe.py`,
+`scripts/leonardo_bulk.sbatch`, `experiments/synthetic_scale_curves.py`) and smoke-tested
+end to end on Leonardo at 4 files per family (job 58622211: 5/5 jobs OK, all 14 families
+labelled in the aggregate). No full-size results yet. The questions and the ways they can
+fail below were written before implementation, so they are fixed before we see results.
+
+Run (Leonardo, `$WORK/JEPAS`):
+
+```bash
+TAG=_synthetic DATASETS="synthetic-image synthetic-video" \
+  sbatch --export=ALL,N=1024,SEED=42 --account=IscrC_TBoneAI --qos=normal --time=01:00:00 scripts/leonardo_bulk.sbatch
+# afterwards
+python experiments/synthetic_scale_curves.py $FAST/outputs/bulk_n1024_seed42_synthetic \
+  --manifest $FAST/datasets_derived/synthetic_v1_seed42/manifest.jsonl --out-dir $FAST/outputs/synthetic_curves_seed42
+```
+
+`N` only names the output directory; the synthetic sets always use every generated file.
+`SYN_PER_FAMILY=<k>` generates a smaller set in its own directory (`..._pf<k>`) for smoke tests.
 
 ## Why
 
