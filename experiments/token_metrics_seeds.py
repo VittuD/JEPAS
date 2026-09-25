@@ -25,6 +25,9 @@ DEFAULT_METRICS = (
     "pca_top3_sum",
     "silhouette",
 )
+# The ratio is meaningless where the null mean is ~0 (adjacent cosine similarity of
+# random tokens is ~0, so real/null explodes); those metrics are tabulated as raw means.
+TABLE_SUFFIX = {"adjacent_cosine_similarity": "mean"}
 # Columns taken per metric: the raw mean and the value relative to the null baseline.
 SUFFIXES = ("mean", "ratio")
 
@@ -130,7 +133,8 @@ def main() -> None:
     shown = [r for r in rows if r["method"] == args.order_method and r["params"] == args.order_params]
     table_cols = ["dataset", "model"]
     for metric in metrics:
-        table_cols += [f"{metric}_ratio_mean", f"{metric}_ratio_sd"]
+        suffix = TABLE_SUFFIX.get(metric, "ratio")
+        table_cols += [f"{metric}_{suffix}_mean", f"{metric}_{suffix}_sd"]
     consistency = ordering_consistency(
         runs, metric=args.order_metric, suffix="ratio", method=args.order_method, params=args.order_params
     )
@@ -139,7 +143,7 @@ def main() -> None:
         "",
         f"Runs: {', '.join(str(p) for p in args.runs)}",
         "",
-        f"## {args.order_method} {args.order_params}: mean and sd of the null ratio across seeds",
+        f"## {args.order_method} {args.order_params}: mean and sd across seeds (null ratio; raw mean for adjacent_cosine_similarity)",
         "",
         to_markdown(shown, [c for c in table_cols if any(c in r for r in shown)]),
         "",
