@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 import tempfile
@@ -203,8 +204,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--models", nargs="+", help="Default: every model found for the dataset.")
     p.add_argument("--k", type=int, default=3, help="Must be one of the k used in the bulk run.")
     p.add_argument("--metric", default="boundary_fraction", help="Per-sample metric used by --pick.")
-    p.add_argument("--cluster-pca-dim", type=int, default=16)
-    p.add_argument("--seed", type=int, default=0, help="Clustering seed (token_metrics default) and random pick seed.")
+    p.add_argument("--cluster-pca-dim", type=int, help="Default: the value recorded by the bulk token_metrics run.")
+    p.add_argument("--cluster-seed", type=int, help="Default: the seed recorded by the bulk token_metrics run.")
+    p.add_argument("--seed", type=int, default=0, help="Seed for --pick random.")
     p.add_argument("--reference-size", type=int, default=256)
     p.add_argument("--no-reference", action="store_true")
     return p.parse_args()
@@ -224,6 +226,12 @@ def main() -> None:
     sources = {m: load_sources(dataset_dir / m / "embeddings.h5") for m in models}
     check_alignment(sources)
     print(f"alignment OK: {len(next(iter(sources.values())))} samples identical across {models}")
+
+    # Reproduce the scored clustering exactly: reuse the seed / PCA dim the bulk run recorded.
+    recorded = json.loads((dataset_dir / models[0] / "token_metrics" / "manifest.json").read_text())
+    cluster_seed = recorded["seed"] if args.cluster_seed is None else args.cluster_seed
+    cluster_pca_dim = recorded["cluster_pca_dim"] if args.cluster_pca_dim is None else args.cluster_pca_dim
+    print(f"clustering: seed={cluster_seed} pca_dim={cluster_pca_dim}")
 
     params = f"k={args.k}"
     scored = {
@@ -251,7 +259,7 @@ def main() -> None:
         for m in models:
             tokens = handles[m]["tokens"][index].astype(np.float32)
             grid = geometry[m][2]
-            maps[m] = _model_maps(tokens, grid, k=args.k, cluster_pca_dim=args.cluster_pca_dim, seed=args.seed)
+            maps[m] = _model_maps(tokens, grid, k=args.k, cluster_pca_dim=cluster_pca_dim, seed=cluster_seed)
             recorded = scored[m].get(index)
             if args.metric == "boundary_fraction" and recorded is not None:
                 drift = abs(recorded - maps[m][2]["boundary_fraction"])
