@@ -91,3 +91,8 @@ Boundary-fraction ratio, mean over 3 seeds (sd in brackets), k-means k=3:
 | kinetics | 0.712 (0.006) | 0.318 (0.002) | 0.735 (0.007) | | |
 | imagenet | | | | 0.515 (0.003) | 0.412 (0.015) |
 | rsna | | | | 0.504 (0.001) | 0.437 (0.027) |
+| coco | | | | 0.507 (0.005) | 0.416 (0.015) |
+
+### COCO (val2017) added
+
+COCO val2017 was added as a third image dataset (`DATASETS=coco` into each existing `bulk_n1024_seed{0,1,42}`; ijepa and radjepa only, ~1 min per job, no failures, no skipped inputs). It reproduces ImageNet within about one sd (boundary-fraction ratio ijepa 0.507 vs 0.515, radjepa 0.416 vs 0.412; components ratio 0.301 vs 0.317 and 0.203 vs 0.202), and radjepa < ijepa in every seed. So the image-model result does not depend on the dataset, but COCO adds little new information on this metric. The seed summary now covers 108 configurations.
