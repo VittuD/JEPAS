@@ -33,11 +33,17 @@ N="${N:-10}"
 SEED="${SEED:-42}"
 FRAMES=16
 CLUSTER_K="2 3 4"   # must be identical for real metrics and the null baseline
-OUT="${FAST}/outputs/bulk_n${N}_seed${SEED}"
+# Optional overrides for controlled variants (e.g. a resolution control):
+#   TAG=_res256       suffix for the output dir, so a variant never mixes with the main run
+#   IMAGE_SIZE=256    passed to extract_batch --image-size (model default when unset)
+#   IMAGE_MODELS / VIDEO_MODELS  space-separated model lists
+TAG="${TAG:-}"
+IMAGE_SIZE="${IMAGE_SIZE:-}"
+OUT="${FAST}/outputs/bulk_n${N}_seed${SEED}${TAG}"
 DS="${JEPAS_DATASETS_ROOT}"
 
-IMAGE_MODELS=(ijepa radjepa)
-VIDEO_MODELS=(vjepa2-vitl vjepa2-1-vitb echojepa)
+read -ra IMAGE_MODELS <<< "${IMAGE_MODELS-ijepa radjepa}"
+read -ra VIDEO_MODELS <<< "${VIDEO_MODELS-vjepa2-vitl vjepa2-1-vitb echojepa}"
 
 # DATASETS selects a subset (e.g. DATASETS=coco adds one dataset to an existing OUT dir:
 # finished datasets are not touched and the aggregate covers everything in OUT).
@@ -93,7 +99,8 @@ run_one() {  # dataset kind model  (GPU is fixed by CUDA_VISIBLE_DEVICES)
   # shellcheck disable=SC2086
   python experiments/extract_batch.py --model "${model}" --kind "${kind}" \
     --input ${INPUTS[$dataset]} --recursive --n "${N}" --seed "${SEED}" \
-    --frames "${FRAMES}" --output-dir "${OUT}/${dataset}" || return 1
+    --frames "${FRAMES}" ${IMAGE_SIZE:+--image-size "${IMAGE_SIZE}"} \
+    --output-dir "${OUT}/${dataset}" || return 1
   stage token_metrics
   python experiments/token_metrics.py --model "${model}" --seed "${SEED}" \
     --workers "${CPUS_PER_JOB}" --cluster-k ${CLUSTER_K} \
