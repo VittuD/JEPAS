@@ -63,3 +63,11 @@ Gaps for our use:
 2. Write a driver (e.g. `experiments/compare_bulk_maps.py`) around the `visualize.py` helpers: choose samples by metric percentile, render a model grid per sample. Run on Leonardo (embeddings are there) or pull only the few needed samples' tokens.
 3. Decide the vjepa2-1-vitb question from the maps. If degenerate, add a token-diversity metric (e.g. participation ratio or cosine to the mean token) so smoothness is not rewarded for collapse.
 4. Then: more seeds (cheap, 38 min per run) for confidence intervals, and consider reporting only boundary-fraction and ratio-based metrics.
+
+## Update: alignment verified, driver built, first maps inspected
+
+- **Alignment:** `sources` in every `embeddings.h5` is identical, index by index, across all models of a dataset (checked for all 6 datasets, 1024 unique inputs each). Sample index i is the same input for every model.
+- **Driver:** `experiments/compare_bulk_maps.py <bulk_dir> <dataset> --out-dir D --pick {low,median,high,random} --count N` (or `--indices`). It reuses the bulk run's clustering seed and PCA dim from `token_metrics/manifest.json`; its recomputed boundary fraction matches `summary.csv` (a mismatch prints a WARNING). Run it via `srun`, not on the login node (the 10-min CPU limit kills it).
+- **vjepa2-1-vitb is not collapsed.** On kinetics[901] (smoothest across models) its PCA/k-means maps follow the scene: hat, sky, sea, sand, hands. On kinetics[69] (hair, no layout) it is noisy like the others, though still smoother in k-means (bf 0.34 vs 0.61-0.63). Its smoothness is content-dependent, not degenerate.
+- **vjepa2-vitl** shows weak spatial structure even on the smooth sample and near-random maps on the rough one; echojepa sits between (it picks up the bottom text band on kinetics[901]).
+- **New confound to control:** vjepa2-1-vitb has a 24x24 grid per tubelet vs 16x16 (vjepa2-vitl) and 14x14 (echojepa): a finer grid means adjacent tokens cover smaller, more similar image patches, which raises adjacent similarity and lowers boundary fraction regardless of the model. The Gaussian null does not remove this (it removes token count, not pixel sampling density). Control: run vjepa2-1-vitb at the vitl resolution (or vitl at vitb's) and compare.
