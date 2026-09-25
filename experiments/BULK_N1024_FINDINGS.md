@@ -123,3 +123,18 @@ Figures: `$WORK/maps_res_control/` (echonet: 635, 792 = roughest on average; 652
 - **vitl at 256 is near-noise even where the input is trivially uniform.** echonet[652]: it does not separate the black background from tissue in the PCA map (bf 0.57, cc 356); kinetics[871] shows only a faint dark-couch patch (bf 0.56).
 - **vitl at 384 recovers part of the structure.** echonet[652]: the sector interior and outside become distinguishable in PCA, k-means has a central blob, but within-region speckle remains (bf 0.48). kinetics[871]: a central region appears (bf 0.44). This matches the resolution effect in the table above, and shows it is a partial recovery, not parity with vitb.
 - Consequence for interpretation: the smoothness gap reflects real differences in the maps (vitb's tokens vary at the scale of scene regions; vitl's vary at the scale of individual patches), not a metric artefact of the grid or of degenerate tokens. It does not say which is better: fine per-patch variation can be useful for dense tasks, and the maps were not tied to any label. Two samples out of the twelve rendered; not a systematic result.
+
+### Resolution control, three seeds (0, 1, 42)
+
+Jobs 58620744/58620745/58620747/58620748 (seeds 0 and 1) plus the seed-42 runs above; all COMPLETED, 0 failures. Boundary-fraction ratio, mean (sd) over the three seeds, k-means k=3:
+
+| dataset | vitb@384 (main) | vitb@256 | vitl@256 (main) | vitl@384 |
+|---|---|---|---|---|
+| diving48 | 0.319 (0.009) | 0.345 (0.013) | 0.613 (0.004) | 0.575 (0.003) |
+| echonet | 0.246 (0.003) | 0.297 (0.002) | 0.835 (0.002) | 0.716 (0.002) |
+| epic-kitchens | 0.394 (0.009) | 0.423 (0.010) | 0.767 (0.008) | 0.766 (0.001) |
+| kinetics | 0.318 (0.002) | 0.359 (0.003) | 0.735 (0.007) | 0.728 (0.002) |
+
+Components ratio (mean): vitb 0.081/0.101/0.158/0.102 at 384 vs 0.092/0.104/0.176/0.120 at 256; vitl 0.448/0.847/0.765/0.670 at 256 vs 0.384/0.558/0.726/0.641 at 384 (diving48/echonet/epic/kinetics).
+
+The seed-42 conclusions hold with three seeds and the sds are small (<= 0.013): the vitb-vitl gap at a matched grid (0.25-0.42 vs 0.58-0.84) is far larger than any resolution effect; resolution moves vitb by +0.03-0.05 (384 -> 256) and vitl by -0.04 (diving48), -0.12 (echonet), ~0 (epic, kinetics). The EchoNet caveat for vitl stands.
