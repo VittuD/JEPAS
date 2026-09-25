@@ -71,3 +71,23 @@ Gaps for our use:
 - **vjepa2-1-vitb is not collapsed.** On kinetics[901] (smoothest across models) its PCA/k-means maps follow the scene: hat, sky, sea, sand, hands. On kinetics[69] (hair, no layout) it is noisy like the others, though still smoother in k-means (bf 0.34 vs 0.61-0.63). Its smoothness is content-dependent, not degenerate.
 - **vjepa2-vitl** shows weak spatial structure even on the smooth sample and near-random maps on the rough one; echojepa sits between (it picks up the bottom text band on kinetics[901]).
 - **New confound to control:** vjepa2-1-vitb has a 24x24 grid per tubelet vs 16x16 (vjepa2-vitl) and 14x14 (echojepa): a finer grid means adjacent tokens cover smaller, more similar image patches, which raises adjacent similarity and lowers boundary fraction regardless of the model. The Gaussian null does not remove this (it removes token count, not pixel sampling density). Control: run vjepa2-1-vitb at the vitl resolution (or vitl at vitb's) and compare.
+
+## Update: three seeds (0, 1, 42)
+
+Runs: `bulk_n1024_seed{0,1,42}`, each 1024 samples per dataset, ~38 min, 16/16 OK, 0 skipped inputs. Combined with `experiments/token_metrics_seeds.py` (output: `$FAST/outputs/seed_summary_n1024/seed_summary.{csv,md}`). Different seeds draw different samples, so the spread is sampling variability of the per-configuration mean; with 3 seeds the sd is a rough guide.
+
+- **Ordering is identical in every seed on every dataset** (boundary-fraction ratio, k-means k=3).
+- **Seed sd is small:** boundary-fraction ratio sd 0.001-0.027 (largest: radjepa on rsna, 0.027, on a mean of 0.44); adjacent cosine similarity sd < 0.003.
+- **Correction:** vjepa2-vitl is not the roughest everywhere. On Diving48 the order is vjepa2-1-vitb < vjepa2-vitl < echojepa; on echonet, epic-kitchens and kinetics it is vjepa2-1-vitb < echojepa < vjepa2-vitl. Only these hold on every dataset: vjepa2-1-vitb is the smoothest video model, radjepa is smoother than ijepa.
+- **Ratio caveat:** `adjacent_cosine_similarity` is tabulated as a raw mean, because its null is ~0 and real/null gives ratios of order 1e4.
+
+Boundary-fraction ratio, mean over 3 seeds (sd in brackets), k-means k=3:
+
+| dataset | echojepa | vjepa2-1-vitb | vjepa2-vitl | ijepa | radjepa |
+|---|---|---|---|---|---|
+| diving48 | 0.660 (0.020) | 0.319 (0.009) | 0.613 (0.004) | | |
+| echonet | 0.572 (0.007) | 0.246 (0.003) | 0.835 (0.002) | | |
+| epic-kitchens | 0.737 (0.010) | 0.394 (0.009) | 0.767 (0.008) | | |
+| kinetics | 0.712 (0.006) | 0.318 (0.002) | 0.735 (0.007) | | |
+| imagenet | | | | 0.515 (0.003) | 0.412 (0.015) |
+| rsna | | | | 0.504 (0.001) | 0.437 (0.027) |
