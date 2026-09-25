@@ -6,7 +6,7 @@
 #   Time bound from the n=10 smoke run (16 jobs, 383 s total incl. fixed model-load costs):
 #   treating all of it as per-sample cost gives 383/10*1024/4 GPUs ~ 2.7 h; realistic ~1.5-2 h.
 #
-# One node, all 4 GPUs: the 16 (dataset, model) jobs are pulled from a shared queue by
+# One node, all 4 GPUs: the (dataset, model) jobs are pulled from a shared queue by
 # 4 workers, one per GPU (CUDA_VISIBLE_DEVICES), each using CPUS/4 metric workers.
 #
 # Fair-comparison design: every model sees the SAME sampled inputs per dataset
@@ -39,8 +39,14 @@ DS="${JEPAS_DATASETS_ROOT}"
 IMAGE_MODELS=(ijepa radjepa)
 VIDEO_MODELS=(vjepa2-vitl vjepa2-1-vitb echojepa)
 
+# DATASETS selects a subset (e.g. DATASETS=coco adds one dataset to an existing OUT dir:
+# finished datasets are not touched and the aggregate covers everything in OUT).
+DATASETS="${DATASETS:-imagenet rsna coco diving48 echonet kinetics epic-kitchens}"
+want() { [[ " ${DATASETS} " == *" $1 "* ]]; }
+
 declare -A INPUTS
 INPUTS[imagenet]="${IMAGENET2012_VAL}"
+INPUTS[coco]="${DS}/detection/coco/val2017"
 INPUTS[rsna]="${DS}/medical/rsna-pneumonia-detection-challenge/stage_2_test_images_png"
 INPUTS[diving48]="${DS}/video/diving48/rgb"
 INPUTS[echonet]="${DS}/eidos-datasets/data-registry/medical/cardio/catdx/StanfordDataset/Videos"
@@ -49,8 +55,10 @@ INPUTS[kinetics]="/leonardo/prod/data/ai/kinetics/kinetics400/256/val"
 EPIC_CLIPS="${FAST}/datasets_derived/epic-kitchens_clips10s_n${N}_seed${SEED}"
 INPUTS[epic-kitchens]="${EPIC_CLIPS}"
 
-python scripts/make_epic_clips.py --root /leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100 \
-  --out-dir "${EPIC_CLIPS}" --n "${N}" --seed "${SEED}" --workers "${SLURM_CPUS_PER_TASK}" || exit 1
+if want epic-kitchens; then
+  python scripts/make_epic_clips.py --root /leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100 \
+    --out-dir "${EPIC_CLIPS}" --n "${N}" --seed "${SEED}" --workers "${SLURM_CPUS_PER_TASK}" || exit 1
+fi
 
 NGPU=4
 CPUS_PER_JOB=$(( SLURM_CPUS_PER_TASK / NGPU ))
@@ -61,8 +69,8 @@ mkdir -p "${LOGS}"
 QUEUE="${LOGS}/queue.txt"
 COUNTER="${LOGS}/queue.counter"
 : > "${QUEUE}"
-for d in imagenet rsna; do for m in "${IMAGE_MODELS[@]}"; do echo "$d image $m" >> "${QUEUE}"; done; done
-for d in diving48 echonet kinetics epic-kitchens; do for m in "${VIDEO_MODELS[@]}"; do echo "$d video $m" >> "${QUEUE}"; done; done
+for d in imagenet rsna coco; do want "$d" || continue; for m in "${IMAGE_MODELS[@]}"; do echo "$d image $m" >> "${QUEUE}"; done; done
+for d in diving48 echonet kinetics epic-kitchens; do want "$d" || continue; for m in "${VIDEO_MODELS[@]}"; do echo "$d video $m" >> "${QUEUE}"; done; done
 echo 0 > "${COUNTER}"
 DONE_COUNT="${LOGS}/done.count"
 echo 0 > "${DONE_COUNT}"

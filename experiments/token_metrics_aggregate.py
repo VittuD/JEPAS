@@ -46,6 +46,7 @@ from experiments.catalog import canonical_model_name, model_specs  # noqa: E402
 _DATASET_FRAGMENTS = (
     ("imagenet", "imagenet"),
     ("rsna-pneumonia", "rsna"),
+    ("detection/coco", "coco"),
     ("diving48", "diving48"),
     ("kinetics", "kinetics"),
     ("epic-kitchens", "epic-kitchens"),

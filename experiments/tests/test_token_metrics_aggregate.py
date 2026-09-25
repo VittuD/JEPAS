@@ -52,6 +52,7 @@ class InferDatasetModalityTest(unittest.TestCase):
         cases = {
             "/shared/datasets/classification/imagenet/val/n01/x.JPEG": "imagenet",
             "/shared/datasets/medical/rsna-pneumonia-detection-challenge/stage_2_test_images_png/a.png": "rsna",
+            "/shared/datasets/detection/coco/val2017/000000000139.jpg": "coco",
             "/shared/datasets/video/diving48/rgb/clip.mp4": "diving48",
             "/leonardo/prod/data/ai/kinetics/kinetics400/256/val/abseiling/x.mp4": "kinetics",
             "/leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100/P01/videos/P01_01.MP4": "epic-kitchens",
