@@ -47,16 +47,23 @@ read -ra VIDEO_MODELS <<< "${VIDEO_MODELS-vjepa2-vitl vjepa2-1-vitb echojepa}"
 
 # DATASETS selects a subset (e.g. DATASETS=coco adds one dataset to an existing OUT dir:
 # finished datasets are not touched and the aggregate covers everything in OUT).
+# The synthetic probe (synthetic-image, synthetic-video; see experiments/SYNTHETIC_PROBE.md)
+# is opt-in: e.g. TAG=_synthetic DATASETS="synthetic-image synthetic-video".
 DATASETS="${DATASETS:-imagenet rsna coco diving48 echonet kinetics epic-kitchens}"
 want() { [[ " ${DATASETS} " == *" $1 "* ]]; }
 
 declare -A INPUTS
+declare -A NOF   # per-dataset sample count override (default N); synthetic sets use every file
 INPUTS[imagenet]="${IMAGENET2012_VAL}"
 INPUTS[coco]="${DS}/detection/coco/val2017"
 INPUTS[rsna]="${DS}/medical/rsna-pneumonia-detection-challenge/stage_2_test_images_png"
 INPUTS[diving48]="${DS}/video/diving48/rgb"
 INPUTS[echonet]="${DS}/eidos-datasets/data-registry/medical/cardio/catdx/StanfordDataset/Videos"
 INPUTS[kinetics]="/leonardo/prod/data/ai/kinetics/kinetics400/256/val"
+SYN_PER_FAMILY="${SYN_PER_FAMILY:-128}"   # a smaller value (smoke test) gets its own directory
+SYN="${FAST}/datasets_derived/synthetic_v1_seed${SEED}$([[ ${SYN_PER_FAMILY} == 128 ]] || echo "_pf${SYN_PER_FAMILY}")"
+INPUTS[synthetic-image]="${SYN}/image"
+INPUTS[synthetic-video]="${SYN}/video"
 # EPIC recordings are minutes to half an hour long, so cut seeded 10 s windows first.
 EPIC_CLIPS="${FAST}/datasets_derived/epic-kitchens_clips10s_n${N}_seed${SEED}"
 INPUTS[epic-kitchens]="${EPIC_CLIPS}"
@@ -64,6 +71,14 @@ INPUTS[epic-kitchens]="${EPIC_CLIPS}"
 if want epic-kitchens; then
   python scripts/make_epic_clips.py --root /leonardo/prod/data/ai/epic-kitchens/epic-kitchens-100 \
     --out-dir "${EPIC_CLIPS}" --n "${N}" --seed "${SEED}" --workers "${SLURM_CPUS_PER_TASK}" || exit 1
+fi
+
+if want synthetic-image || want synthetic-video; then
+  # Deterministic in the seed: regenerating is safe, so only skip when the manifest exists.
+  [[ -s "${SYN}/manifest.jsonl" ]] || python scripts/make_synthetic_probe.py --out-dir "${SYN}" \
+    --per-family "${SYN_PER_FAMILY}" --seed "${SEED}" --workers "${SLURM_CPUS_PER_TASK}" || exit 1
+  NOF[synthetic-image]=$(grep -c '"kind": "image"' "${SYN}/manifest.jsonl")
+  NOF[synthetic-video]=$(grep -c '"kind": "video"' "${SYN}/manifest.jsonl")
 fi
 
 NGPU=4
@@ -75,8 +90,8 @@ mkdir -p "${LOGS}"
 QUEUE="${LOGS}/queue.txt"
 COUNTER="${LOGS}/queue.counter"
 : > "${QUEUE}"
-for d in imagenet rsna coco; do want "$d" || continue; for m in "${IMAGE_MODELS[@]}"; do echo "$d image $m" >> "${QUEUE}"; done; done
-for d in diving48 echonet kinetics epic-kitchens; do want "$d" || continue; for m in "${VIDEO_MODELS[@]}"; do echo "$d video $m" >> "${QUEUE}"; done; done
+for d in imagenet rsna coco synthetic-image; do want "$d" || continue; for m in "${IMAGE_MODELS[@]}"; do echo "$d image $m" >> "${QUEUE}"; done; done
+for d in diving48 echonet kinetics epic-kitchens synthetic-video; do want "$d" || continue; for m in "${VIDEO_MODELS[@]}"; do echo "$d video $m" >> "${QUEUE}"; done; done
 echo 0 > "${COUNTER}"
 DONE_COUNT="${LOGS}/done.count"
 echo 0 > "${DONE_COUNT}"
@@ -98,7 +113,7 @@ run_one() {  # dataset kind model  (GPU is fixed by CUDA_VISIBLE_DEVICES)
   stage extract
   # shellcheck disable=SC2086
   python experiments/extract_batch.py --model "${model}" --kind "${kind}" \
-    --input ${INPUTS[$dataset]} --recursive --n "${N}" --seed "${SEED}" \
+    --input ${INPUTS[$dataset]} --recursive --n "${NOF[$dataset]:-${N}}" --seed "${SEED}" \
     --frames "${FRAMES}" ${IMAGE_SIZE:+--image-size "${IMAGE_SIZE}"} \
     --output-dir "${OUT}/${dataset}" || return 1
   stage token_metrics

@@ -27,6 +27,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -55,7 +56,15 @@ _DATASET_FRAGMENTS = (
 )
 
 
+# Synthetic probe set: <...>/synthetic_v1_seed42/<image|video>/<family>/<file>. One label
+# per family ("syn-<family>") so a single extraction job yields per-family rows.
+_SYNTHETIC_RE = re.compile(r"synthetic_v\d+[^/]*/(?:image|video)/([^/]+)/")
+
+
 def infer_dataset(source: str) -> str:
+    match = _SYNTHETIC_RE.search(source)
+    if match:
+        return f"syn-{match.group(1)}"
     lowered = source.lower()
     for fragment, label in _DATASET_FRAGMENTS:
         if fragment in lowered:
