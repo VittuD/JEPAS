@@ -153,3 +153,25 @@ class SelectInputsTest(unittest.TestCase):
     def test_too_few_readable_inputs_fail(self) -> None:
         with self.assertRaises(ValueError):
             select_inputs(self.candidates, 10, 7, lambda p: int(p.stem) < 5)
+
+
+class CatalogVariantsAcceptedByAdapterTest(unittest.TestCase):
+    """Every catalogued V-JEPA variant must be a valid --variant for the adapter."""
+
+    def test_adapter_accepts_every_catalogued_vjepa_variant(self) -> None:
+        import subprocess
+        import sys
+
+        from experiments.catalog import model_specs
+
+        for name, spec in model_specs().items():
+            if spec.adapter.name != "vjepa2.py":
+                continue
+            variant = spec.adapter_args[spec.adapter_args.index("--variant") + 1]
+            result = subprocess.run(
+                [sys.executable, str(spec.adapter), "--variant", variant, "--help"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, f"{name}: {result.stderr[-200:]}")
+            # --help exits before validating; check the choices list directly.
+            self.assertIn(variant, result.stdout, name)

@@ -30,7 +30,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--variant",
-        choices=("vjepa2-vitl", "vjepa2-vith", "vjepa2-1-vitb", "vjepa2-1-vitg"),
+        choices=(
+            "vjepa2-vitl",
+            "vjepa2-vith",
+            "vjepa2-vitg",
+            "vjepa2-vitg-384",
+            "vjepa2-1-vitb",
+            "vjepa2-1-vitl",
+            "vjepa2-1-vitg",
+            "vjepa2-1-vitG",
+        ),
         default="vjepa2-1-vitb",
         help="Source model variant to instantiate.",
     )
