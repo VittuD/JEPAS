@@ -195,3 +195,32 @@ $FAST/datasets_derived/synthetic_v1_seed<S>/
 - Video masks and moving-object tracking metrics.
 - Textures and natural-image perturbations (e.g. blur or noise added to real images),
   which would sit between synthetic and natural.
+
+## Results (v1, seed 42, full size)
+
+Job 58622496: generation (1024 images, 768 videos) plus 5/5 jobs OK in 8 min; 26,112 per-sample rows. Curves: `$FAST/outputs/synthetic_curves_seed42/curves.{md,csv}`. Maps: `$WORK/maps_synthetic/<family>/`. Boundary-fraction ratio to the Gaussian null, k-means k=3, mean per family; single seed, single generation, out-of-distribution inputs (see Limits). Real-data values for reference are from `BULK_N1024_FINDINGS.md`.
+
+| Input | ijepa | radjepa | echojepa | vjepa2-1-vitb | vjepa2-vitl |
+|---|---|---|---|---|---|
+| uniform image / flicker (spatially uniform video) | 0.47 | 0.20 | 0.41-0.46 | 0.18-0.27 | 0.69-0.71 |
+| gradient | 0.47 | 0.19 | | | |
+| regions / static_pattern (flat regions) | 0.49-0.58 | 0.19-0.21 | 0.39-0.45 | 0.08-0.10 | 0.70-0.78 |
+| noise (pixel / blocks / static) | 0.52 | 0.54 (pixel) | 0.54 | 0.60 | 0.86 |
+| natural data (main runs) | 0.50-0.52 | 0.41-0.44 | 0.57-0.74 | 0.25-0.39 | 0.61-0.84 |
+
+**Q1 (do the maps depend on the input?)**
+- **vjepa2-1-vitb and radjepa: yes.** Both are very smooth on flat inputs (0.08-0.27) and rough on noise (0.54-0.60), and their natural-data values sit between the two. The risk that vitb's smoothness is content-independent (position or a global component) is not supported: on a two-colour diagonal image (static_pattern_0000) its PCA and k-means maps trace the diagonal edge exactly and are constant across tubelets.
+- **vjepa2-vitl and ijepa: largely no, at the k-means boundary level.** vitl is 0.70 on a spatially uniform flicker video and 0.70-0.78 on flat regions, essentially the same as its 0.61-0.84 on natural video and only somewhat below its 0.86 on noise; adjacent cosine similarity is 0.55-0.69 even on a constant frame, vs 0.99 for vitb. ijepa is 0.47 on a uniform image and 0.49-0.58 on regions, vs 0.50-0.52 on natural images. For these two models the natural-data smoothness value is close to what they produce on an input with no structure, so it says little about the content. In the same diagonal-edge video, vitl's PCA map is speckle with no trace of the edge.
+- **echojepa is in between**: 0.39-0.46 on flat/uniform inputs, 0.54-0.65 on noise, and its maps drift across tubelets even for a static input.
+- Consequence for the bulk ranking: for vitl (video) and ijepa (image), roughness on natural data is largely intrinsic. The ranking still holds as a description of the token maps, but "vitl is rough" should not be read as "vitl encodes fine detail in the image".
+
+**Q2 (effective resolution)**: for both image models the boundary ratio rises with the number of cells per side up to 16 (about one cell per token on a 16x16 grid) and then drops at 32 (checker: radjepa 0.17/0.26/0.43/0.66/0.19, ijepa 0.47/0.56/0.63/0.82/0.36 for 2/4/8/16/32 cells; noise_blocks and stripes peak at 16-32). Structure finer than the token grid is averaged out inside a token and the map looks smooth again, so the effective resolution is about the token grid. radjepa's PCA shows the checkerboard at 2-16 cells and moire at 32; ijepa shows it only faintly and is dominated by a border-versus-centre positional pattern (visible even on uniform inputs). The video probe has no scale sweep (noise fixed at 16 cells), so this is images only.
+
+**Q3 (metrics on known structure)**: partly inconclusive. With a fixed k=3 clustering the ratio hardly changes with the true number of regions (radjepa 0.19-0.21 for 2-5 regions; ijepa 0.49-0.58), so the boundary/component metrics are not a region counter. radjepa's maps do follow the region and object masks visually (regions and shapes), ijepa's much less. The explicit label-agreement score (ARI / boundary alignment against the stored masks) is still the step that would settle this.
+
+**Q4 (temporal)**: vitb responds to motion in the expected order (static 0.09, moving shape 0.09 / 0.12 / 0.15 at speeds 0.1 / 0.25 / 0.5) and slightly to a cut (0.10-0.16 vs 0.08-0.10 static); echojepa is flat with speed (0.47-0.49) but higher than static (0.39-0.45); vitl shows no difference between static, moving and cut (all 0.69-0.79). For noise, temporal vs static noise is 0.59 vs 0.60 (vitb), 0.65 vs 0.54 (echojepa), 0.95 vs 0.86 (vitl).
+
+### What this changes
+- Two models (vitl on video, ijepa on images) have a roughness floor that the input barely changes; comparisons of raw smoothness against them should be paired with the synthetic floor, e.g. report natural-data smoothness relative to the same model's value on flat inputs.
+- vjepa2-1-vitb's smoothness is content-following; the earlier concern is answered for that model.
+- Not yet done: label-agreement scoring (Q3), more seeds/generations, a scale sweep for video, and the same probe at the matched-resolution variants (vitb@256, vitl@384) to separate resolution from model.
