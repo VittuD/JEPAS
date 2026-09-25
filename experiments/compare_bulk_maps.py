@@ -37,7 +37,7 @@ from experiments.visualize import (  # noqa: E402
     _video_frames,
 )
 
-PICKS = ("random", "low", "median", "high")
+PICKS = ("random", "low", "median", "high", "first")
 TUBELET_SIZE = 2
 
 
@@ -82,7 +82,8 @@ def select_indices(
     Each model's metric is converted to a percentile rank, so models with different
     scales are comparable, then averaged over models. `low`/`high` take the samples
     that are smoothest/roughest on average, `median` those closest to the middle,
-    `random` a seeded draw.
+    `random` a seeded draw, and `first` the lowest indices (with --contains on a synthetic
+    family this walks through the family's swept parameter values in order).
     """
     if pick not in PICKS:
         raise ValueError(f"pick must be one of {PICKS}, got {pick!r}.")
@@ -90,6 +91,8 @@ def select_indices(
     if not common:
         raise ValueError("No sample index is present for every model.")
     count = min(count, len(common))
+    if pick == "first":
+        return common[:count]
     if pick == "random":
         rng = np.random.default_rng(seed)
         return sorted(int(i) for i in rng.choice(common, size=count, replace=False))
@@ -201,6 +204,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--indices", help="Comma-separated sample indices (overrides --pick).")
     p.add_argument("--pick", choices=PICKS, default="random")
     p.add_argument("--count", type=int, default=4)
+    p.add_argument("--contains", help="Only consider samples whose source path contains this text (e.g. /checker/).")
     p.add_argument("--models", nargs="+", help="Default: every model found for the dataset.")
     p.add_argument("--k", type=int, default=3, help="Must be one of the k used in the bulk run.")
     p.add_argument("--metric", default="boundary_fraction", help="Per-sample metric used by --pick.")
@@ -243,6 +247,11 @@ def main() -> None:
         )
         for m in models
     }
+    if args.contains:
+        allowed = {i for i, source in enumerate(next(iter(sources.values()))) if args.contains in source}
+        if not allowed:
+            raise SystemExit(f"No source contains {args.contains!r}.")
+        scored = {m: {i: v for i, v in values.items() if i in allowed} for m, values in scored.items()}
     if args.indices:
         indices = [int(i) for i in args.indices.split(",")]
     else:

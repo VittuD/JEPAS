@@ -39,6 +39,9 @@ class SelectIndicesTest(unittest.TestCase):
     def test_median_is_the_middle_sample(self) -> None:
         self.assertEqual(select_indices(self.METRICS, pick="median", count=1, seed=0), [2])
 
+    def test_first_takes_the_lowest_common_indices(self) -> None:
+        self.assertEqual(select_indices(self.METRICS, pick="first", count=3, seed=0), [0, 1, 2])
+
     def test_random_is_seeded_and_capped(self) -> None:
         first = select_indices(self.METRICS, pick="random", count=3, seed=7)
         self.assertEqual(first, select_indices(self.METRICS, pick="random", count=3, seed=7))
