@@ -119,21 +119,27 @@ def default_checkpoint(variant: str) -> Path:
         return ROOT_DIR / "weights" / "vjepa2" / "vitl.pt"
     if variant == "vjepa2-vith":
         return ROOT_DIR / "weights" / "vjepa2" / "vith.pt"
+    if variant == "vjepa2-vitg":
+        return ROOT_DIR / "weights" / "vjepa2" / "vitg.pt"
+    if variant == "vjepa2-vitg-384":
+        return ROOT_DIR / "weights" / "vjepa2" / "vitg-384.pt"
     if variant == "vjepa2-1-vitb":
         return ROOT_DIR / "weights" / "vjepa2" / "vjepa2_1_vitb_dist_vitG_384.pt"
+    if variant == "vjepa2-1-vitl":
+        return ROOT_DIR / "weights" / "vjepa2" / "vjepa2_1_vitl_dist_vitG_384.pt"
     if variant == "vjepa2-1-vitg":
         return ROOT_DIR / "weights" / "vjepa2" / "vjepa2_1_vitg_384.pt"
+    if variant == "vjepa2-1-vitG":
+        return ROOT_DIR / "weights" / "vjepa2" / "vjepa2_1_vitG_384.pt"
     raise ValueError(f"Unknown variant: {variant}")
 
 
 def default_image_size(variant: str) -> int:
     if variant == "vjepa2-vitl":
         return 256
-    if variant == "vjepa2-vith":
+    if variant in ("vjepa2-vith", "vjepa2-vitg"):
         return 256
-    if variant == "vjepa2-1-vitb":
-        return 384
-    if variant == "vjepa2-1-vitg":
+    if variant in ("vjepa2-vitg-384", "vjepa2-1-vitb", "vjepa2-1-vitl", "vjepa2-1-vitg", "vjepa2-1-vitG"):
         return 384
     raise ValueError(f"Unknown variant: {variant}")
 
@@ -210,6 +216,10 @@ def main() -> None:
     from src.hub.backbones import (
         vjepa2_1_vit_base_384,
         vjepa2_1_vit_giant_384,
+        vjepa2_1_vit_gigantic_384,
+        vjepa2_1_vit_large_384,
+        vjepa2_vit_giant,
+        vjepa2_vit_giant_384,
         vjepa2_vit_huge,
         vjepa2_vit_large,
     )
@@ -226,10 +236,18 @@ def main() -> None:
         model, _predictor = vjepa2_vit_large(pretrained=False)
     elif args.variant == "vjepa2-vith":
         model, _predictor = vjepa2_vit_huge(pretrained=False)
+    elif args.variant == "vjepa2-vitg":
+        model, _predictor = vjepa2_vit_giant(pretrained=False)
+    elif args.variant == "vjepa2-vitg-384":
+        model, _predictor = vjepa2_vit_giant_384(pretrained=False)
     elif args.variant == "vjepa2-1-vitb":
         model, _predictor = vjepa2_1_vit_base_384(pretrained=False)
+    elif args.variant == "vjepa2-1-vitl":
+        model, _predictor = vjepa2_1_vit_large_384(pretrained=False)
     elif args.variant == "vjepa2-1-vitg":
         model, _predictor = vjepa2_1_vit_giant_384(pretrained=False)
+    elif args.variant == "vjepa2-1-vitG":
+        model, _predictor = vjepa2_1_vit_gigantic_384(pretrained=False)
     else:
         raise ValueError(f"Unknown variant: {args.variant}")
     checkpoint = torch.load(checkpoint_path, map_location="cpu")

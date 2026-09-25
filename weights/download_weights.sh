@@ -22,8 +22,16 @@ Repos:
              V-JEPA 2 ViT-L/16, smallest non-distilled V-JEPA 2 checkpoint
   vjepa2-vith
              V-JEPA 2 ViT-H/16 non-distilled checkpoint
+  vjepa2-vitg
+             V-JEPA 2 ViT-g/16 (256 px, ~16 GB)
+  vjepa2-vitg-384
+             V-JEPA 2 ViT-g/16 (384 px, ~16 GB)
+  vjepa2-1-vitl
+             V-JEPA 2.1 ViT-L/16 distilled from ViT-G (384 px, ~5 GB)
   vjepa2-1-vitg
              V-JEPA 2.1 ViT-g/16, smallest non-distilled V-JEPA 2.1 checkpoint
+  vjepa2-1-vitG
+             V-JEPA 2.1 ViT-G/16 (2B, 384 px, ~30 GB)
   ijepa      I-JEPA ViT-H/14 IN1K checkpoint, smallest architecture class listed in ijepa README
   radjepa    RadJEPA Hugging Face repo, ViT-B/14
   all        Smallest model for each non-manual repo
@@ -162,6 +170,20 @@ if want vjepa2-1-vitg "$@"; then
     https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitg_384.pt \
     vjepa2_1_vitg_384.pt
 fi
+
+for spec in \
+  "vjepa2-vitg vitg.pt" \
+  "vjepa2-vitg-384 vitg-384.pt" \
+  "vjepa2-1-vitl vjepa2_1_vitl_dist_vitG_384.pt" \
+  "vjepa2-1-vitG vjepa2_1_vitG_384.pt"; do
+  read -r name file <<< "${spec}"
+  # Opt-in only (large): not part of `all` semantics beyond the explicit name.
+  for group in "$@"; do
+    if [[ "${group}" == "${name}" ]]; then
+      download_direct vjepa2 "https://dl.fbaipublicfiles.com/vjepa2/${file}" "${file}"
+    fi
+  done
+done
 
 if want ijepa "$@"; then
   download_direct \
