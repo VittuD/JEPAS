@@ -224,3 +224,14 @@ Job 58622496: generation (1024 images, 768 videos) plus 5/5 jobs OK in 8 min; 26
 - Two models (vitl on video, ijepa on images) have a roughness floor that the input barely changes; comparisons of raw smoothness against them should be paired with the synthetic floor, e.g. report natural-data smoothness relative to the same model's value on flat inputs.
 - vjepa2-1-vitb's smoothness is content-following; the earlier concern is answered for that model.
 - Not yet done: label-agreement scoring (Q3), more seeds/generations, a scale sweep for video, and the same probe at the matched-resolution variants (vitb@256, vitl@384) to separate resolution from model.
+
+## Position-locked patterns on noise (observed in the maps, 2026-09-26)
+
+Maps: `$WORK/maps_synthetic/noise_static/synthetic-video_0384.png`, `noise_temporal/synthetic-video_0512.png` (k-means k=3, tubelets 0 / 4 / 7).
+
+- **vjepa2-1-vitb (24x24 grid)** shows a period-2 lattice in the k-means map (rows and columns), and a token-scale checkerboard in the PCA-RGB map. In `noise_temporal`, where every frame is different noise, tubelets 0, 4 and 7 show the *same* lattice. The tokens therefore carry a fixed pattern set by position, not by the input.
+- **vjepa2-vitl (16x16)** shows a different fixed pattern (a centre-versus-border blob, clearest in `noise_temporal`); in `noise_static` it changes with the tubelet index.
+- **echojepa** shows vertical (top/bottom) banding, stable across tubelets.
+- Consequences: (1) the boundary ratio on noise (vitb 0.40 for this file, vitl 0.54-0.64) mixes two things, random roughness and regular structure; (2) the earlier "vitb follows the input" reading (Q1) holds for content (it traces the diagonal edge), but on unstructured input vitb is not featureless, so its low natural-data boundary ratio can partly reflect a regular lattice; (3) the mechanism is **not established**. A positional-encoding origin is plausible, not tested.
+
+Tests (no new GPU runs; `experiments/position_lock.py`, on stored embeddings): position-locked variance fraction (chance about 1/samples), split-half cosine of the position-mean map across disjoint sample halves, and the share of spatial spectral power on the Nyquist lines (period-2 lattice) with the dominant spatial period. Run it on the noise families and on a real dataset for contrast, for the older models and the two largest ones (`_large`), to see whether the lattice is a V-JEPA 2.1 property or a size effect.
