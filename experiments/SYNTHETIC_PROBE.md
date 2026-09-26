@@ -229,9 +229,29 @@ Job 58622496: generation (1024 images, 768 videos) plus 5/5 jobs OK in 8 min; 26
 
 Maps: `$WORK/maps_synthetic/noise_static/synthetic-video_0384.png`, `noise_temporal/synthetic-video_0512.png` (k-means k=3, tubelets 0 / 4 / 7).
 
-- **vjepa2-1-vitb (24x24 grid)** shows a period-2 lattice in the k-means map (rows and columns), and a token-scale checkerboard in the PCA-RGB map. In `noise_temporal`, where every frame is different noise, tubelets 0, 4 and 7 show the *same* lattice. The tokens therefore carry a fixed pattern set by position, not by the input.
+- **vjepa2-1-vitb (24x24 grid)** shows a regular lattice in the k-means map (rows and columns; the spectrum below puts its period at about 3 tokens, not 2), and a token-scale checkerboard in the PCA-RGB map. In `noise_temporal`, where every frame is different noise, tubelets 0, 4 and 7 show the *same* lattice. The tokens therefore carry a fixed pattern set by position, not by the input.
 - **vjepa2-vitl (16x16)** shows a different fixed pattern (a centre-versus-border blob, clearest in `noise_temporal`); in `noise_static` it changes with the tubelet index.
 - **echojepa** shows vertical (top/bottom) banding, stable across tubelets.
 - Consequences: (1) the boundary ratio on noise (vitb 0.40 for this file, vitl 0.54-0.64) mixes two things, random roughness and regular structure; (2) the earlier "vitb follows the input" reading (Q1) holds for content (it traces the diagonal edge), but on unstructured input vitb is not featureless, so its low natural-data boundary ratio can partly reflect a regular lattice; (3) the mechanism is **not established**. A positional-encoding origin is plausible, not tested.
 
 Tests (no new GPU runs; `experiments/position_lock.py`, on stored embeddings): position-locked variance fraction (chance about 1/samples), split-half cosine of the position-mean map across disjoint sample halves, and the share of spatial spectral power on the Nyquist lines (period-2 lattice) with the dominant spatial period. Run it on the noise families and on a real dataset for contrast, for the older models and the two largest ones (`_large`), to see whether the lattice is a V-JEPA 2.1 property or a size effect.
+
+### Position-lock results (job 58679055 and the kinetics run, seed 42, 128 samples per group, existing models)
+
+| model (grid) | input | pos_variance_fraction | split_half_cosine | nyquist_ratio | dominant_period |
+|---|---|---|---|---|---|
+| vjepa2-1-vitb (24x24) | noise_static / noise_temporal | 0.71 / 0.60 | 0.994 / 0.990 | 0.23 / 0.33 | 3 / 3 |
+| vjepa2-vitl (16x16) | noise_static / noise_temporal | 0.24 / 0.22 | 0.952 / 0.944 | 0.88 / 0.80 | 16 / 16 |
+| echojepa (14x14) | noise_static / noise_temporal | 0.29 / 0.26 | 0.963 / 0.956 | 0.77 / 0.76 | 14 / 14 |
+| vjepa2-1-vitb | kinetics | 0.043 | 0.686 | 0.43 | 24 |
+| vjepa2-vitl | kinetics | 0.088 | 0.844 | 0.78 | 16 |
+| echojepa | kinetics | 0.168 | 0.922 | 0.74 | 14 |
+
+Chance level for the variance fraction is 0.008.
+
+- **All three models are position-locked on noise**: 22-71% of the token variance is a fixed per-position map (chance 0.8%), and that map is nearly identical between disjoint halves of the samples (cosine 0.94-0.99), for static and for per-frame noise alike. So the fixed pattern seen in the maps is a property of the model, not of one sample.
+- **vjepa2-1-vitb has the strongest lock and a different shape.** 60-71% of its variance is fixed, and its dominant spatial period is 3 tokens (mid-frequency lattice). vitl and echojepa have a dominant period equal to their grid size (one cycle across the map), i.e. the low-frequency blob / banding seen in the maps.
+- **Correction:** the "period 2" reading from the maps is not supported. No model concentrates power at the Nyquist lines (ratio below 1 everywhere); vitb's is at period 3.
+- **On natural video the locked share is small** (0.04-0.17) because content dominates the variance, so the two input types are not directly comparable. vitb has the smallest share on kinetics (0.043) but a nonzero split-half cosine (0.69), so a fixed component is present there too, just much weaker relative to the content.
+- **Reading for the bulk ranking:** vitb's low boundary ratio on natural data should not be attributed to content-following alone; a position-locked component that is very strong on noise is part of what the model outputs. It is weak relative to content on real video, which is why vitb's maps still trace real edges (Q1).
+- Still open: the cause (positional encoding is one candidate, untested), and whether the larger models (vitG, vitg) show it. `experiments/position_lock.py --run <bulk_n1024_seed42_large>` answers the second.
