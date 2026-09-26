@@ -255,3 +255,22 @@ Chance level for the variance fraction is 0.008.
 - **On natural video the locked share is small** (0.04-0.17) because content dominates the variance, so the two input types are not directly comparable. vitb has the smallest share on kinetics (0.043) but a nonzero split-half cosine (0.69), so a fixed component is present there too, just much weaker relative to the content.
 - **Reading for the bulk ranking:** vitb's low boundary ratio on natural data should not be attributed to content-following alone; a position-locked component that is very strong on noise is part of what the model outputs. It is weak relative to content on real video, which is why vitb's maps still trace real edges (Q1).
 - Still open: the cause (positional encoding is one candidate, untested), and whether the larger models (vitG, vitg) show it. `experiments/position_lock.py --run <bulk_n1024_seed42_large>` answers the second.
+
+### Largest models on the probe (seed 42; job 58678292)
+
+Boundary-fraction ratio, k-means k=3 (curves: `$FAST/outputs/synthetic_curves_large/curves.md`; position-lock: job 58680178 and its kinetics run):
+
+| input | vjepa2-1-vitb | vjepa2-1-vitG | vjepa2-vitl | vjepa2-vitg |
+|---|---|---|---|---|
+| flat regions (static_pattern) | 0.08-0.10 | 0.10-0.13 | 0.70-0.78 | 0.70-0.77 |
+| flicker (ramp / random) | 0.18-0.27 | 0.14 / 0.27 | 0.69-0.71 | 0.80 / 0.73 |
+| cut | 0.10-0.16 | 0.11-0.19 | 0.69-0.79 | 0.70-0.81 |
+| noise (static / temporal) | 0.60 / 0.59 | 0.60 / 0.60 | 0.86 / 0.95 | 0.88 / 0.97 |
+| position-locked variance on noise | 0.71 / 0.60 | 0.70 / 0.63 | 0.24 / 0.22 | 0.28 / 0.24 |
+| dominant period on noise (tokens) | 3 | 3 | 16 | 16 |
+| position-locked variance on kinetics | 0.043 | 0.036 | 0.088 | 0.102 |
+
+- **The family split holds on the probe.** vitG is content-following like vitb (0.10-0.13 on flat regions, 0.60 on noise), and vitg keeps vitl's floor (0.70-0.77 on flat regions, close to its 0.88-0.97 on noise). Adjacent cosine similarity on a constant frame is 0.92-0.98 (vitG) vs 0.57-0.66 (vitg).
+- **The position-locked pattern is also family-specific.** vitG reproduces vitb's strong lock (about 0.6-0.7 of the token variance on noise, dominant period 3, split-half cosine 0.99), and vitg reproduces vitl's weaker, low-frequency one (0.22-0.28, period = grid size). It is therefore a property of V-JEPA 2.1 (or of its training), not of model size.
+- **The cause of the lattice is still open.** A positional-encoding origin is plausible and untested. Caveat: one seed, one generation, and the probe is out-of-distribution input.
+- Not done: vitG/vitg at matched resolution, the ARI label-agreement score, a scale sweep for video, and a test of what in the 2.1 recipe produces the lattice (e.g. a check of the positional-embedding component).

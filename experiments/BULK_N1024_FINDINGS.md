@@ -138,3 +138,21 @@ Jobs 58620744/58620745/58620747/58620748 (seeds 0 and 1) plus the seed-42 runs a
 Components ratio (mean): vitb 0.081/0.101/0.158/0.102 at 384 vs 0.092/0.104/0.176/0.120 at 256; vitl 0.448/0.847/0.765/0.670 at 256 vs 0.384/0.558/0.726/0.641 at 384 (diving48/echonet/epic/kinetics).
 
 The seed-42 conclusions hold with three seeds and the sds are small (<= 0.013): the vitb-vitl gap at a matched grid (0.25-0.42 vs 0.58-0.84) is far larger than any resolution effect; resolution moves vitb by +0.03-0.05 (384 -> 256) and vitl by -0.04 (diving48), -0.12 (echonet), ~0 (epic, kinetics). The EchoNet caveat for vitl stands.
+
+## Largest V-JEPA models (seed 42, n=1024; job 58678292, 16 min)
+
+Question: is vjepa2-1-vitb's smoothness an effect of the V-JEPA 2.1 version, of size, or of distillation (vitb is 2.1 distilled, vitl is 2.0)? Added `vjepa2-1-vitG` (2.1 ViT-G, 2B, 384 px, grid 8x24x24) and `vjepa2-vitg` (2.0 ViT-g, 256 px, grid 8x16x16); both loaded with `missing_keys=0 unexpected_keys=0`. Same seeded samples as the main run; 10/10 jobs OK, 0 skips. Run dir `$FAST/outputs/bulk_n1024_seed42_large`, comparison `large_vs_main/variants.{md,csv}`.
+
+Boundary-fraction ratio to the Gaussian null (k-means k=3), and adjacent cosine similarity (raw mean) in brackets:
+
+| dataset | vjepa2-1-vitb | vjepa2-1-vitG | vjepa2-vitl | vjepa2-vitg | echojepa |
+|---|---|---|---|---|---|
+| diving48 | 0.314 (0.80) | 0.268 (0.75) | 0.611 (0.44) | 0.555 (0.46) | 0.661 (0.59) |
+| echonet | 0.249 (0.86) | 0.243 (0.83) | 0.836 (0.49) | 0.785 (0.52) | 0.574 (0.51) |
+| epic-kitchens | 0.385 (0.76) | 0.348 (0.70) | 0.762 (0.42) | 0.704 (0.45) | 0.747 (0.59) |
+| kinetics | 0.315 (0.79) | 0.300 (0.74) | 0.729 (0.43) | 0.680 (0.45) | 0.717 (0.59) |
+
+- **The split is by model family, not by size.** Each larger model sits next to its smaller sibling: the 2B V-JEPA 2.1 ViT-G is smooth like the ViT-B (0.24-0.35 vs 0.25-0.39), and the V-JEPA 2.0 ViT-g is rough like the ViT-L (0.56-0.79 vs 0.61-0.84). Scaling within a family lowers the ratio slightly (0.01-0.06) but does not move a model across the gap of 0.3-0.5 between families.
+- **Version/recipe, not size.** Size alone does not explain the smoothness of vitb. Distillation is also not required: vitG is not a distilled model. What is common to vitb and vitG and absent from the 2.0 models is the V-JEPA 2.1 training. Which component of the 2.1 recipe matters was not tested here.
+- **Grid density is not the cause either**: vitG's grid (24x24) matches vitb's, and vitg's (16x16) matches vitl's, so the family/grid pairing is confounded in the natural-data table. The resolution control on vitb/vitl (above) and the fact that vitg@256 and vitl@256 agree while vitb@256 stays smooth already separate the two for those models; vitG was only run at its native resolution.
+- Ordering within the main-run findings is unchanged: 2.1 models < 2.0 models, on all four datasets.
